@@ -12,6 +12,13 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
 
 # Jupyter
 .ipynb_checkpoints/

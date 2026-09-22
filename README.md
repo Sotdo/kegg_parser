@@ -1,0 +1,122 @@
+# kegg_parser
+
+Fetch and flatten **KEGG BRITE** hierarchy trees and **KEGG PATHWAY** annotations for a given
+organism (e.g. `spo`, `hsa`, `eco`) into gene-centric **TSV** or **Parquet** tables.
+
+The package handles two data products:
+
+| Product | Source | Output |
+|---|---|---|
+| BRITE | `download_htext?format=json` | `derived/brite_flat.<fmt>` |
+| PATHWAY | `bioservices.kegg.KEGG` | `derived/pathway_gene_mapping.<fmt>`, `derived/gene_pathway_summary.<fmt>` |
+
+Raw KEGG responses are cached under `<outdir>/raw/` so repeated runs avoid re-querying the API.
+
+## Installation
+
+```bash
+mamba env create -f environment.yml
+mamba activate kegg_parser
+```
+
+`environment.yml` installs the package in editable mode (`pip install -e .`). To install into an
+existing environment instead:
+
+```bash
+pip install -e .
+```
+
+## Quick start
+
+```bash
+# Full pipeline (BRITE + PATHWAY) for Schizosaccharomyces pombe
+mamba run -n kegg_parser python scripts/run_kegg_pipeline.py --org spo
+
+# Only BRITE, as Parquet, including a specialized tree
+mamba run -n kegg_parser python scripts/fetch_brite.py \
+    --org spo --format parquet --brite-ids spo00001,spo01000
+
+# Only PATHWAY
+mamba run -n kegg_parser python scripts/fetch_pathway.py --org spo
+
+# Fetch every BRITE tree KEGG advertises for the organism
+mamba run -n kegg_parser python scripts/run_kegg_pipeline.py --org spo --all-brite
+```
+
+### CLI arguments
+
+| Argument | Applies to | Description |
+|---|---|---|
+| `--org` | all | KEGG organism code (required). |
+| `--outdir` | all | Output root (default `./data/<org>`). |
+| `--format` | all | `tsv` (default) or `parquet`. |
+| `--brite-ids` | BRITE, pipeline | Comma-separated BRITE ids (default `<org>00001`). |
+| `--all-brite` | BRITE, pipeline | Process every BRITE tree listed for the organism. |
+| `--force` | all | Ignore the raw cache and re-download. |
+| `--verbose` | all | Debug-level logging. |
+
+## Output schema
+
+### `brite_flat`
+
+One row per terminal node that resolves to a gene or KO entry.
+
+| Column | Meaning |
+|---|---|
+| `BRITE_ID` | Source tree id (e.g. `spo00001`). |
+| `Level_A` / `Level_B` / `Level_C` | Ancestor labels from the root downward. Any classification deeper than three levels is joined into `Level_C` with `" > "`. |
+| `Level_D` | KO entry text (`K00844 HK; hexokinase [EC:2.7.1.1]`). |
+| `Level_E` | Organism gene entry text (`2542634 hxk1; hexokinase 1`). |
+| `KO_ID` / `KO_Name` | Parsed from `Level_D`. |
+| `Gene_ID` / `Gene_Symbol` / `Gene_Description` | Parsed from `Level_E`; the KEGG/species prefix is stripped from `Gene_ID`. |
+| `EC_Number` | All EC numbers found in the leaf, `;`-joined. |
+
+Terminal classification labels without a KO or gene are skipped; shallow branches never raise.
+
+### `pathway_gene_mapping`
+
+`Gene_ID`, `Pathway_ID`, `Pathway_Name`, `Pathway_Class` — one row per unique gene/pathway pair.
+
+### `gene_pathway_summary`
+
+`Gene_ID`, `Pathway_IDs`, `Pathway_Names`, `Pathway_Classes` (`;`-joined) plus `Pathway_Count`.
+
+## Project structure
+
+```
+kegg_parser/
+├── environment.yml
+├── pyproject.toml
+├── README.md
+├── src/kegg_parser/
+│   ├── config.py     # endpoints, delays, retry policy, column enums
+│   ├── utils.py      # logging, retry decorator, pacing, table I/O
+│   ├── brite.py      # BRITE download, tree traversal, flattening
+│   └── pathway.py    # bioservices PATHWAY fetching and aggregation
+├── scripts/
+│   ├── fetch_brite.py
+│   ├── fetch_pathway.py
+│   └── run_kegg_pipeline.py
+└── tests/
+```
+
+## Python API
+
+```python
+from pathlib import Path
+from kegg_parser import process_brite_trees, process_pathways, OutputFormat
+
+process_brite_trees("spo", Path("data/spo"), fmt=OutputFormat.PARQUET)
+process_pathways("spo", Path("data/spo"), fmt=OutputFormat.PARQUET)
+```
+
+## Rate limiting
+
+KEGG REST requests are paced with a random `0.3–0.5 s` delay and wrapped in a retry decorator with
+exponential backoff (3 attempts). Large BRITE JSON downloads use a long read timeout.
+
+## Tests
+
+```bash
+pytest
+```

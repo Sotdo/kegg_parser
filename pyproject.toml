@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kegg-parser"
+version = "1.0.0"
+description = "Fetch and flatten KEGG BRITE and PATHWAY annotation data for a given organism."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Yusheng Yang" }]
+keywords = ["kegg", "brite", "pathway", "bioinformatics", "annotation"]
+dependencies = [
+    "requests>=2.31",
+    "pandas>=2.2",
+    "bioservices>=1.11",
+    "loguru>=0.7",
+    "click>=8.1",
+    "pyarrow>=15",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# Import ordering is intentionally bespoke (standard -> project -> third-party),
+# so the isort rule ("I") is disabled and the layout is maintained by hand.
+select = ["E", "F", "UP", "B", "T201"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
