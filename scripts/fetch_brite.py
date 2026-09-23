@@ -8,9 +8,9 @@ Download organism-specific KEGG BRITE hierarchy trees as JSON from the KEGG
 ``download_htext`` endpoint, cache them under ``<outdir>/raw/brite/``, and
 flatten each tree into a gene-level table (one row per organism gene entry).
 
-By default the main classification tree ``<org>00001`` is processed. Use
-``--brite-ids`` to target specific trees (for example ``spo01000,spo03000``) or
-``--all-brite`` to process every BRITE tree KEGG lists for the organism.
+By default every BRITE tree KEGG advertises for the organism is processed and
+integrated into one table. Use ``--brite-ids`` to target a subset instead (for
+example ``spo00001,spo01000``).
 
 Output
 ------
@@ -24,7 +24,7 @@ Usage
     mamba run -n kegg_parser python scripts/fetch_brite.py --org spo
     mamba run -n kegg_parser python scripts/fetch_brite.py --org spo --format parquet
     mamba run -n kegg_parser python scripts/fetch_brite.py --org spo --brite-ids spo00001,spo01000
-    mamba run -n kegg_parser python scripts/fetch_brite.py --org spo --all-brite --force --verbose
+    mamba run -n kegg_parser python scripts/fetch_brite.py --org spo --force --verbose
 
 Author: Yusheng Yang (guidance) + Agent (implementation)
 Date:   2026-09-22
@@ -109,12 +109,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--brite-ids",
         default=None,
-        help="Comma-separated BRITE ids to process (default: <org>00001).",
-    )
-    parser.add_argument(
-        "--all-brite",
-        action="store_true",
-        help="Process every BRITE tree KEGG lists for the organism.",
+        help="Comma-separated BRITE ids to process (default: every BRITE tree for the organism).",
     )
     parser.add_argument("--force", action="store_true", help="Re-download raw data even when cached.")
     parser.add_argument("--verbose", action="store_true", help="Enable debug-level logging.")
@@ -128,7 +123,7 @@ def main() -> int:
 
     outdir = (args.outdir if args.outdir is not None else Path(DEFAULT_OUTDIR_TEMPLATE.format(org=args.org))).resolve()
     try:
-        brite_ids = select_brite_ids(args.org, brite_ids=_split_brite_ids(args.brite_ids), all_brite=args.all_brite)
+        brite_ids = select_brite_ids(args.org, brite_ids=_split_brite_ids(args.brite_ids))
         config = BriteRunConfig(
             org=args.org,
             outdir=outdir,

@@ -14,7 +14,15 @@ Version: 1.0.0
 # =============================================================================
 # IMPORTS
 # =============================================================================
-from kegg_parser.brite import _parse_ec, _parse_gene, _parse_ko, flatten_brite_tree
+import kegg_parser.brite as brite_module
+from kegg_parser.brite import (
+    _parse_ec,
+    _parse_gene,
+    _parse_ko,
+    default_brite_ids,
+    flatten_brite_tree,
+    select_brite_ids,
+)
 from kegg_parser.config import BRITE_COLUMNS
 
 # =============================================================================
@@ -156,10 +164,37 @@ def test_flatten_brite_tree_handles_reversed_field_order() -> None:
     assert len(reversed_rows) == 2
 
 
+def test_select_brite_ids_prefers_explicit_ids() -> None:
+    """Explicit ids win and blanks are dropped, without any network access."""
+    assert select_brite_ids("spo", ["spo00001", "", "spo03000"]) == ["spo00001", "spo03000"]
+
+
+def test_default_brite_ids_discovers_all(monkeypatch) -> None:
+    """Without explicit ids, every advertised tree is selected."""
+    monkeypatch.setattr(brite_module, "list_organism_brite_ids", lambda org: {"spo00001": "a", "spo03000": "b"})
+    assert default_brite_ids("spo") == ["spo00001", "spo03000"]
+    assert select_brite_ids("spo") == ["spo00001", "spo03000"]
+
+
+def test_default_brite_ids_falls_back_on_discovery_error(monkeypatch) -> None:
+    """A discovery failure falls back to the main tree instead of crashing."""
+
+    def _boom(org: str) -> dict[str, str]:
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(brite_module, "list_organism_brite_ids", _boom)
+    assert default_brite_ids("spo") == ["spo00001"]
+
+
 def test_parse_ko_and_gene_helpers() -> None:
     """The low-level field parsers split text as documented."""
     assert _parse_ko("K00844 HK; hexokinase [EC:2.7.1.1]") == ("K00844", "HK; hexokinase [EC:2.7.1.1]")
     assert _parse_ko("not-a-ko") == ("", "not-a-ko")
     assert _parse_gene("hsa:3098 HK1; hexokinase-1") == ("3098", "HK1", "hexokinase-1")
+    assert _parse_gene("2542569 SPOM_SPAC186.08C; L-lactate dehydrogenase") == (
+        "2542569",
+        "SPAC186.08C",
+        "L-lactate dehydrogenase",
+    )
     assert _parse_gene("") == ("", "", "")
     assert _parse_ec("K00001 X; enzyme [EC:1.2.3.4]", "gene [EC:5.6.7.-]") == "1.2.3.4;5.6.7.-"

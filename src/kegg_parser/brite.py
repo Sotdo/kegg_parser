@@ -60,7 +60,13 @@ from kegg_parser.config import (
     TEXT_ENCODING,
     OutputFormat,
 )
-from kegg_parser.utils import atomic_write_bytes, ensure_dir, http_get_bytes, write_table
+from kegg_parser.utils import (
+    atomic_write_bytes,
+    ensure_dir,
+    http_get_bytes,
+    strip_systematic_prefix,
+    write_table,
+)
 
 # =============================================================================
 # GLOBAL CONSTANTS & ENUMS
@@ -74,11 +80,6 @@ PATHWAY_PATTERN = re.compile(r"\[PATH:([^\]]+)\]")
 # =============================================================================
 # CORE LOGIC
 # =============================================================================
-def default_brite_ids(org: str) -> list[str]:
-    """Return the default BRITE tree identifiers for an organism code."""
-    return [f"{org}{DEFAULT_BRITE_SUFFIX}"]
-
-
 def list_organism_brite_ids(org: str) -> dict[str, str]:
     """Return the mapping of BRITE id to title for all trees available for an organism."""
     payload = http_get_bytes(f"{KEGG_REST_BASE}/list/brite/{org}")
@@ -93,14 +94,24 @@ def list_organism_brite_ids(org: str) -> dict[str, str]:
     return result
 
 
-def select_brite_ids(org: str, brite_ids: Sequence[str] | None = None, all_brite: bool = False) -> list[str]:
-    """Resolve the BRITE ids to process from explicit ids, all available trees, or the default."""
+def default_brite_ids(org: str) -> list[str]:
+    """Return every BRITE tree id KEGG advertises for an organism, falling back to the main tree."""
+    fallback = [f"{org}{DEFAULT_BRITE_SUFFIX}"]
+    try:
+        discovered = list(list_organism_brite_ids(org).keys())
+    except Exception as error:
+        logger.warning(f"Could not discover BRITE trees for '{org}' ({error}); using {fallback}")
+        return fallback
+    if not discovered:
+        return fallback
+    logger.info(f"Discovered {len(discovered)} BRITE tree(s) for organism '{org}'")
+    return discovered
+
+
+def select_brite_ids(org: str, brite_ids: Sequence[str] | None = None) -> list[str]:
+    """Resolve the BRITE ids to process from explicit ids, or every advertised tree by default."""
     if brite_ids:
         return [brite_id for brite_id in brite_ids if brite_id]
-    if all_brite:
-        discovered = list(list_organism_brite_ids(org).keys())
-        logger.info(f"Discovered {len(discovered)} BRITE tree(s) for organism '{org}'")
-        return discovered
     return default_brite_ids(org)
 
 
@@ -161,7 +172,7 @@ def _parse_gene(text: str) -> tuple[str, str, str]:
     if not tokens:
         return "", "", cleaned
     gene_id = SPECIES_PREFIX_PATTERN.sub("", tokens[0])
-    symbol = " ".join(tokens[1:]).strip()
+    symbol = strip_systematic_prefix(" ".join(tokens[1:]).strip())
     description = tail.strip()
     return gene_id, symbol, description
 
@@ -273,7 +284,7 @@ def process_brite_trees(
     force: bool = False,
 ) -> Path:
     """Download, flatten and persist every requested BRITE tree for an organism."""
-    resolved_ids = list(brite_ids) if brite_ids else default_brite_ids(org)
+    resolved_ids = select_brite_ids(org, brite_ids)
     logger.info(f"Processing {len(resolved_ids)} BRITE tree(s) for organism '{org}': {resolved_ids}")
 
     frames: list[pd.DataFrame] = []

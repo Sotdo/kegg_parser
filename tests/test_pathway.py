@@ -77,7 +77,7 @@ def test_parse_gene_list_extracts_symbol_and_description() -> None:
     """The gene list yields the primary alias and definition per gene id."""
     genes = parse_gene_list(GENE_LIST_TEXT)
     assert genes["2538729"] == ("tpi1", "triosephosphate isomerase")
-    assert genes["111"] == ("SPOM_SPAC212.08C", "GPI anchored protein")
+    assert genes["111"] == ("SPAC212.08C", "GPI anchored protein")
 
 
 def test_build_mapping_and_summary() -> None:

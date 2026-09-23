@@ -57,6 +57,7 @@ from kegg_parser.config import (
     RETRY_JITTER,
     RETRY_MAX_DELAY,
     RETRY_TIMEOUT,
+    SYSTEMATIC_NAME_PREFIX,
     TEXT_ENCODING,
     USER_AGENT,
 )
@@ -104,6 +105,11 @@ def retryable[T](func: Callable[..., T]) -> Callable[..., T]:
 def polite_delay(min_delay: float = MIN_REQUEST_DELAY, max_delay: float = MAX_REQUEST_DELAY) -> None:
     """Sleep for a random short interval to respect KEGG rate limits."""
     time.sleep(random.uniform(min_delay, max_delay))
+
+
+def strip_systematic_prefix(symbol: str, prefix: str = SYSTEMATIC_NAME_PREFIX) -> str:
+    """Strip the organism systematic-name prefix (e.g. ``SPOM_``) from a gene symbol."""
+    return symbol.removeprefix(prefix)
 
 
 @retryable
