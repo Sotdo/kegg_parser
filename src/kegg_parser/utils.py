@@ -5,8 +5,10 @@ KEGG Parser Shared Utilities
 Reusable helpers shared by the ``kegg_parser`` modules:
 
 - Loguru logging setup for the CLI scripts.
-- A retry-with-exponential-backoff decorator for flaky network calls.
+- A ``stamina``-backed retry decorator (exponential backoff with jitter) for
+  flaky network calls.
 - Polite request pacing to respect KEGG's rate limits.
+- HTTP fetching via ``httpx``.
 - Atomic writers for raw payloads and a table writer/reader that supports both
   TSV and Parquet outputs.
 
@@ -19,40 +21,42 @@ Output
 
 Author: Yusheng Yang (guidance) + Agent (implementation)
 Date:   2026-09-22
-Version: 1.0.0
+Version: 1.1.0
 """
 
 # =============================================================================
 # IMPORTS
 # =============================================================================
 # Standard library
-import functools
 import random
 import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import TypeVar
 
 # Data processing
 import pandas as pd
 
 # Third-party
-import requests
+import httpx
+import stamina
 from loguru import logger
 
 # Project imports
 from kegg_parser.config import (
-    DOWNLOAD_CHUNK_SIZE,
     MAX_REQUEST_DELAY,
     MAX_RETRIES,
     MIN_REQUEST_DELAY,
     NA_VALUE,
     OutputFormat,
-    REQUEST_TIMEOUT,
-    RETRY_BACKOFF_FACTOR,
-    RETRY_BASE_DELAY,
+    REQUEST_CONNECT_TIMEOUT,
+    REQUEST_POOL_TIMEOUT,
+    REQUEST_READ_TIMEOUT,
+    REQUEST_WRITE_TIMEOUT,
+    RETRY_INITIAL_DELAY,
     RETRY_JITTER,
+    RETRY_MAX_DELAY,
+    RETRY_TIMEOUT,
     TEXT_ENCODING,
     USER_AGENT,
 )
@@ -60,13 +64,9 @@ from kegg_parser.config import (
 # =============================================================================
 # GLOBAL CONSTANTS & ENUMS
 # =============================================================================
-T = TypeVar("T")
-RETRYABLE_EXCEPTIONS: tuple[type[Exception], ...] = (
-    requests.RequestException,
-    ConnectionError,
-    TimeoutError,
-    OSError,
-)
+# ``requests`` (used internally by bioservices) subclasses IOError/OSError, so
+# this tuple also covers bioservices network failures.
+RETRYABLE_EXCEPTIONS: tuple[type[Exception], ...] = (httpx.HTTPError, OSError)
 
 
 # =============================================================================
@@ -89,35 +89,16 @@ def setup_logger(verbose: bool = False) -> None:
 # =============================================================================
 # CORE LOGIC
 # =============================================================================
-def retry_with_backoff(
-    max_retries: int = MAX_RETRIES,
-    base_delay: float = RETRY_BASE_DELAY,
-    backoff_factor: float = RETRY_BACKOFF_FACTOR,
-    jitter: float = RETRY_JITTER,
-    exceptions: tuple[type[Exception], ...] = RETRYABLE_EXCEPTIONS,
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """Decorate a function with retry logic using exponential backoff."""
-
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        @functools.wraps(func)
-        def wrapper(*args: object, **kwargs: object) -> T:
-            for attempt in range(1, max_retries + 1):
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as error:
-                    if attempt >= max_retries:
-                        logger.error(f"{func.__name__} failed after {max_retries} attempt(s): {error}")
-                        raise
-                    delay = base_delay * (backoff_factor ** (attempt - 1)) + random.uniform(0.0, jitter)
-                    logger.warning(
-                        f"{func.__name__} attempt {attempt}/{max_retries} failed ({error}); retrying in {delay:.1f}s"
-                    )
-                    time.sleep(delay)
-            raise RuntimeError(f"{func.__name__} exhausted retries unexpectedly")
-
-        return wrapper
-
-    return decorator
+def retryable[T](func: Callable[..., T]) -> Callable[..., T]:
+    """Decorate a function with stamina retries using the shared backoff policy."""
+    return stamina.retry(
+        on=RETRYABLE_EXCEPTIONS,
+        attempts=MAX_RETRIES,
+        timeout=RETRY_TIMEOUT,
+        wait_initial=RETRY_INITIAL_DELAY,
+        wait_max=RETRY_MAX_DELAY,
+        wait_jitter=RETRY_JITTER,
+    )(func)
 
 
 def polite_delay(min_delay: float = MIN_REQUEST_DELAY, max_delay: float = MAX_REQUEST_DELAY) -> None:
@@ -125,28 +106,30 @@ def polite_delay(min_delay: float = MIN_REQUEST_DELAY, max_delay: float = MAX_RE
     time.sleep(random.uniform(min_delay, max_delay))
 
 
-@retry_with_backoff()
+@retryable
 def http_get_bytes(
     url: str,
     params: dict[str, str] | None = None,
-    timeout: tuple[float, float] = REQUEST_TIMEOUT,
+    timeout: httpx.Timeout | None = None,
 ) -> bytes:
     """Fetch a URL and return the full body as bytes, with retries and pacing."""
     polite_delay()
     logger.debug(f"GET {url} params={params}")
-    with requests.get(
+    request_timeout = timeout or httpx.Timeout(
+        connect=REQUEST_CONNECT_TIMEOUT,
+        read=REQUEST_READ_TIMEOUT,
+        write=REQUEST_WRITE_TIMEOUT,
+        pool=REQUEST_POOL_TIMEOUT,
+    )
+    response = httpx.get(
         url,
         params=params,
-        timeout=timeout,
+        timeout=request_timeout,
+        follow_redirects=True,
         headers={"User-Agent": USER_AGENT},
-        stream=True,
-    ) as response:
-        response.raise_for_status()
-        buffer = bytearray()
-        for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
-            if chunk:
-                buffer.extend(chunk)
-    return bytes(buffer)
+    )
+    response.raise_for_status()
+    return response.content
 
 
 def ensure_dir(path: Path) -> Path:

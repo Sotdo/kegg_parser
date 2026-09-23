@@ -40,18 +40,20 @@ ORGANISM_NAME_SEPARATOR = " - "
 # --- Request pacing & retry policy ------------------------------------------
 REQUEST_CONNECT_TIMEOUT = 30.0
 REQUEST_READ_TIMEOUT = 600.0
-REQUEST_TIMEOUT = (REQUEST_CONNECT_TIMEOUT, REQUEST_READ_TIMEOUT)
+REQUEST_WRITE_TIMEOUT = 30.0
+REQUEST_POOL_TIMEOUT = 30.0
 
 MIN_REQUEST_DELAY = 0.3
 MAX_REQUEST_DELAY = 0.5
 
+# Retry policy consumed by the ``stamina``-backed decorator in ``utils``.
 MAX_RETRIES = 3
-RETRY_BASE_DELAY = 1.0
-RETRY_BACKOFF_FACTOR = 2.0
-RETRY_JITTER = 0.5
+RETRY_TIMEOUT = 60.0
+RETRY_INITIAL_DELAY = 0.5
+RETRY_MAX_DELAY = 10.0
+RETRY_JITTER = 1.0
 
 USER_AGENT = "kegg-parser/1.0 (bioinformatics annotation tool)"
-DOWNLOAD_CHUNK_SIZE = 65536
 
 # --- Output layout -----------------------------------------------------------
 RAW_DIRNAME = "raw"

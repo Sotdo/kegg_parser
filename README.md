@@ -113,10 +113,11 @@ process_brite_trees("spo", Path("data/spo"), fmt=OutputFormat.PARQUET)
 process_pathways("spo", Path("data/spo"), fmt=OutputFormat.PARQUET)
 ```
 
-## Rate limiting
+## Rate limiting & retries
 
-KEGG REST requests are paced with a random `0.3–0.5 s` delay and wrapped in a retry decorator with
-exponential backoff (3 attempts). Large BRITE JSON downloads use a long read timeout.
+KEGG REST requests are paced with a random `0.3–0.5 s` delay and wrapped by a `stamina` retry
+decorator (exponential backoff with jitter, 3 attempts, 60 s cap). HTTP fetching uses `httpx` with a
+long read timeout for the large BRITE JSON downloads.
 
 ## Tests
 

@@ -30,10 +30,11 @@ Version: 1.0.0
 # IMPORTS
 # =============================================================================
 # Standard library
+import io
 import logging
 import re
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 # Data processing
@@ -57,7 +58,7 @@ from kegg_parser.config import (
     TEXT_ENCODING,
     OutputFormat,
 )
-from kegg_parser.utils import atomic_write_text, ensure_dir, polite_delay, retry_with_backoff, write_table
+from kegg_parser.utils import atomic_write_text, ensure_dir, polite_delay, retryable, write_table
 
 # =============================================================================
 # GLOBAL CONSTANTS & ENUMS
@@ -82,7 +83,7 @@ def _create_kegg_client(org: str) -> KEGG:
     return client
 
 
-@retry_with_backoff()
+@retryable
 def _fetch_pathway_list(client: KEGG, org: str) -> str:
     """Fetch ``list/pathway/<org>`` from KEGG."""
     polite_delay()
@@ -90,7 +91,7 @@ def _fetch_pathway_list(client: KEGG, org: str) -> str:
     return client.list("pathway", org) or ""
 
 
-@retry_with_backoff()
+@retryable
 def _fetch_pathway_links(client: KEGG, org: str) -> str:
     """Fetch ``link/pathway/<org>`` (gene to pathway associations) from KEGG."""
     polite_delay()
@@ -98,7 +99,7 @@ def _fetch_pathway_links(client: KEGG, org: str) -> str:
     return client.link("pathway", org) or ""
 
 
-@retry_with_backoff()
+@retryable
 def _fetch_pathway_class(client: KEGG) -> str:
     """Fetch the global ``br08901`` pathway hierarchy used to classify pathways."""
     polite_delay()
@@ -106,7 +107,7 @@ def _fetch_pathway_class(client: KEGG) -> str:
     return client.get(PATHWAY_CLASS_FILE_ID) or ""
 
 
-@retry_with_backoff()
+@retryable
 def _fetch_gene_list(client: KEGG, org: str) -> str:
     """Fetch ``list/<org>`` (all genes with symbol and definition) from KEGG."""
     polite_delay()
@@ -117,6 +118,23 @@ def _fetch_gene_list(client: KEGG, org: str) -> str:
 def _strip_kegg_prefix(value: str) -> str:
     """Remove a leading KEGG database prefix such as ``path:`` or ``spo:``."""
     return value.split(":", 1)[1] if ":" in value else value
+
+
+def _read_kegg_tsv(text: str, columns: Sequence[str]) -> pd.DataFrame:
+    """Parse tab-separated KEGG REST text into a string DataFrame with the given columns."""
+    if not text.strip():
+        return pd.DataFrame(columns=list(columns))
+    frame = pd.read_csv(
+        io.StringIO(text),
+        sep="\t",
+        header=None,
+        dtype=str,
+        keep_default_na=False,
+        na_filter=False,
+    ).fillna("")
+    frame = frame.reindex(columns=range(len(columns)), fill_value="")
+    frame.columns = list(columns)
+    return frame
 
 
 def _download_cached_text(cache_path: Path, force: bool, fetcher: Callable[[], str], description: str) -> str:
@@ -155,15 +173,11 @@ def _strip_common_organism_suffix(names: dict[str, str]) -> None:
 
 def parse_pathway_list(text: str) -> dict[str, str]:
     """Parse ``list/pathway`` text into a ``Pathway_ID -> Pathway_Name`` mapping."""
-    names: dict[str, str] = {}
-    for line in text.splitlines():
-        fields = line.split("\t")
-        if len(fields) < 2:
-            continue
-        pathway_id = _strip_kegg_prefix(fields[0].strip())
-        name = fields[1].strip()
-        if pathway_id and name:
-            names[pathway_id] = name
+    frame = _read_kegg_tsv(text, ["Pathway_ID", "Pathway_Name"])
+    frame["Pathway_ID"] = frame["Pathway_ID"].str.strip().map(_strip_kegg_prefix)
+    frame["Pathway_Name"] = frame["Pathway_Name"].str.strip()
+    frame = frame[(frame["Pathway_ID"] != "") & (frame["Pathway_Name"] != "")]
+    names = dict(zip(frame["Pathway_ID"], frame["Pathway_Name"], strict=True))
     _strip_common_organism_suffix(names)
     logger.info(f"Parsed {len(names):,} pathway names")
     return names
@@ -171,32 +185,24 @@ def parse_pathway_list(text: str) -> dict[str, str]:
 
 def parse_pathway_links(text: str) -> list[tuple[str, str]]:
     """Parse ``link/pathway`` text into ``(Gene_ID, Pathway_ID)`` pairs."""
-    pairs: list[tuple[str, str]] = []
-    for line in text.splitlines():
-        fields = line.split("\t")
-        if len(fields) < 2:
-            continue
-        gene_id = _strip_kegg_prefix(fields[0].strip())
-        pathway_id = _strip_kegg_prefix(fields[1].strip())
-        if gene_id and pathway_id:
-            pairs.append((gene_id, pathway_id))
+    frame = _read_kegg_tsv(text, ["Gene_ID", "Pathway_ID"])
+    frame["Gene_ID"] = frame["Gene_ID"].str.strip().map(_strip_kegg_prefix)
+    frame["Pathway_ID"] = frame["Pathway_ID"].str.strip().map(_strip_kegg_prefix)
+    frame = frame[(frame["Gene_ID"] != "") & (frame["Pathway_ID"] != "")]
+    pairs = list(frame.itertuples(index=False, name=None))
     logger.info(f"Parsed {len(pairs):,} gene-pathway associations")
     return pairs
 
 
 def parse_gene_list(text: str) -> dict[str, tuple[str, str]]:
     """Parse ``list/<org>`` text into a ``Gene_ID -> (Gene_Symbol, Gene_Description)`` mapping."""
+    frame = _read_kegg_tsv(text, ["Gene_ID", "Definition", "Position", "Name"])
+    frame = frame[frame["Gene_ID"] != ""]
     genes: dict[str, tuple[str, str]] = {}
-    for line in text.splitlines():
-        fields = line.split("\t")
-        if len(fields) < 4:
-            continue
-        gene_id = _strip_kegg_prefix(fields[0].strip())
-        symbol_field, _, description = fields[3].partition(";")
+    for gene_raw, name_field in zip(frame["Gene_ID"], frame["Name"], strict=True):
+        symbol_field, _, description = name_field.partition(";")
         aliases = [alias.strip() for alias in symbol_field.split(",") if alias.strip()]
-        symbol = aliases[0] if aliases else ""
-        if gene_id:
-            genes[gene_id] = (symbol, description.strip())
+        genes[_strip_kegg_prefix(gene_raw.strip())] = (aliases[0] if aliases else "", description.strip())
     logger.info(f"Parsed gene names for {len(genes):,} genes")
     return genes
 

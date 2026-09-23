@@ -12,7 +12,8 @@ license = { text = "MIT" }
 authors = [{ name = "Yusheng Yang" }]
 keywords = ["kegg", "brite", "pathway", "bioinformatics", "annotation"]
 dependencies = [
-    "requests>=2.31",
+    "httpx>=0.27",
+    "stamina>=24.2",
     "pandas>=2.2",
     "bioservices>=1.11",
     "loguru>=0.7",
