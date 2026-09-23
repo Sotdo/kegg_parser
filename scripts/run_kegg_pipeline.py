@@ -5,16 +5,19 @@ Run the Full KEGG Parsing Pipeline
 ==================================
 
 Convenience entry point that runs the complete ``kegg_parser`` workflow for a
-single organism: it first flattens the requested KEGG BRITE trees, then fetches
-and summarises the KEGG PATHWAY annotations. Raw responses and derived tables
-are written under a single output root (default ``./data/<org>``).
+single organism: it first flattens the requested KEGG BRITE trees (all of them
+by default), then fetches and summarises the KEGG PATHWAY and MODULE
+annotations. Raw responses and derived tables are written under a single output
+root (default ``./data/<org>``).
 
 Output
 ------
 - ``<outdir>/derived/brite_flat.tsv`` (or ``.parquet``).
 - ``<outdir>/derived/pathway_gene_mapping.tsv`` (or ``.parquet``).
 - ``<outdir>/derived/gene_pathway_summary.tsv`` (or ``.parquet``).
-- Raw caches under ``<outdir>/raw/{brite,pathway}/``.
+- ``<outdir>/derived/module_gene_mapping.tsv`` (or ``.parquet``).
+- ``<outdir>/derived/gene_module_summary.tsv`` (or ``.parquet``).
+- Raw caches under ``<outdir>/raw/{brite,pathway,module,gene}/``.
 
 Usage
 -----
@@ -44,6 +47,7 @@ sys.path.append(str((SCRIPT_DIR / "../src").resolve()))
 # Project imports
 from kegg_parser.brite import process_brite_trees, select_brite_ids  # noqa: E402
 from kegg_parser.config import OutputFormat  # noqa: E402
+from kegg_parser.module import process_modules  # noqa: E402
 from kegg_parser.pathway import process_pathways  # noqa: E402
 from kegg_parser.utils import setup_logger  # noqa: E402
 
@@ -107,12 +111,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--brite-ids",
         default=None,
-        help="Comma-separated BRITE ids to process (default: <org>00001).",
-    )
-    parser.add_argument(
-        "--all-brite",
-        action="store_true",
-        help="Process every BRITE tree KEGG lists for the organism.",
+        help="Comma-separated BRITE ids to process (default: every BRITE tree for the organism).",
     )
     parser.add_argument("--force", action="store_true", help="Re-download raw data even when cached.")
     parser.add_argument("--verbose", action="store_true", help="Enable debug-level logging.")
@@ -126,7 +125,7 @@ def main() -> int:
 
     outdir = (args.outdir if args.outdir is not None else Path(DEFAULT_OUTDIR_TEMPLATE.format(org=args.org))).resolve()
     try:
-        brite_ids = select_brite_ids(args.org, brite_ids=_split_brite_ids(args.brite_ids), all_brite=args.all_brite)
+        brite_ids = select_brite_ids(args.org, brite_ids=_split_brite_ids(args.brite_ids))
         config = PipelineConfig(
             org=args.org,
             outdir=outdir,
@@ -149,8 +148,16 @@ def main() -> int:
             fmt=config.fmt,
             force=config.force,
         )
+        module_mapping_path, module_summary_path = process_modules(
+            config.org,
+            config.outdir,
+            fmt=config.fmt,
+            force=config.force,
+        )
         logger.success(
-            f"KEGG pipeline finished: BRITE -> {brite_path}; PATHWAY -> {mapping_path} | {summary_path}"
+            f"KEGG pipeline finished: BRITE -> {brite_path}; "
+            f"PATHWAY -> {mapping_path} | {summary_path}; "
+            f"MODULE -> {module_mapping_path} | {module_summary_path}"
         )
     except Exception as error:
         logger.exception(f"KEGG pipeline failed: {error}")
