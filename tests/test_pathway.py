@@ -18,6 +18,7 @@ from kegg_parser.config import GENE_SUMMARY_COLUMNS, PATHWAY_MAPPING_COLUMNS
 from kegg_parser.pathway import (
     build_gene_pathway_summary,
     build_pathway_gene_mapping,
+    parse_gene_list,
     parse_pathway_class,
     parse_pathway_links,
     parse_pathway_list,
@@ -40,6 +41,10 @@ CLASS_TEXT = (
     "C    00533  Glycosaminoglycan biosynthesis - keratan sulfate\n"
     "B  Carbohydrate metabolism\n"
     "C    00010  Glycolysis / Gluconeogenesis\n"
+)
+GENE_LIST_TEXT = (
+    "spo:2538729\tCDS\tI:complement(<1..5662)\ttpi1, SPOM_SPCC24B10.21; triosephosphate isomerase\n"
+    "spo:111\tCDS\tI:12158..12994\tSPOM_SPAC212.08C; GPI anchored protein\n"
 )
 
 
@@ -68,23 +73,35 @@ def test_parse_pathway_class_builds_hierarchy() -> None:
     assert classes["00010"] == "Metabolism > Carbohydrate metabolism"
 
 
+def test_parse_gene_list_extracts_symbol_and_description() -> None:
+    """The gene list yields the primary alias and definition per gene id."""
+    genes = parse_gene_list(GENE_LIST_TEXT)
+    assert genes["2538729"] == ("tpi1", "triosephosphate isomerase")
+    assert genes["111"] == ("SPOM_SPAC212.08C", "GPI anchored protein")
+
+
 def test_build_mapping_and_summary() -> None:
-    """Mapping joins names/classes and the summary aggregates per gene."""
+    """Mapping joins names/classes/gene names and the summary aggregates per gene."""
     names = parse_pathway_list(LIST_TEXT)
     links = parse_pathway_links(LINKS_TEXT)
     classes = parse_pathway_class(CLASS_TEXT)
+    genes = parse_gene_list(GENE_LIST_TEXT)
 
-    mapping = build_pathway_gene_mapping(names, links, classes)
+    mapping = build_pathway_gene_mapping(names, links, classes, genes)
     assert list(mapping.columns) == PATHWAY_MAPPING_COLUMNS
     assert len(mapping) == 3
 
     row = mapping[(mapping["Gene_ID"] == "2538729") & (mapping["Pathway_ID"] == "spo00010")].iloc[0]
+    assert row["Gene_Symbol"] == "tpi1"
+    assert row["Gene_Description"] == "triosephosphate isomerase"
     assert row["Pathway_Name"] == "Glycolysis / Gluconeogenesis"
     assert row["Pathway_Class"] == "Metabolism > Carbohydrate metabolism"
 
     summary = build_gene_pathway_summary(mapping)
     assert list(summary.columns) == GENE_SUMMARY_COLUMNS
     gene_row = summary[summary["Gene_ID"] == "2538729"].iloc[0]
+    assert gene_row["Gene_Symbol"] == "tpi1"
+    assert gene_row["Gene_Description"] == "triosephosphate isomerase"
     assert gene_row["Pathway_Count"] == 2
     assert gene_row["Pathway_IDs"] == "spo00010;spo01100"
 

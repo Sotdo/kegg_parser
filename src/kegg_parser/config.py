@@ -96,6 +96,8 @@ class PathwayMappingColumn(StrEnum):
     """Column names of the gene-to-pathway mapping table."""
 
     GENE_ID = "Gene_ID"
+    GENE_SYMBOL = "Gene_Symbol"
+    GENE_DESCRIPTION = "Gene_Description"
     PATHWAY_ID = "Pathway_ID"
     PATHWAY_NAME = "Pathway_Name"
     PATHWAY_CLASS = "Pathway_Class"
@@ -105,6 +107,8 @@ class GeneSummaryColumn(StrEnum):
     """Column names of the per-gene pathway aggregation table."""
 
     GENE_ID = "Gene_ID"
+    GENE_SYMBOL = "Gene_Symbol"
+    GENE_DESCRIPTION = "Gene_Description"
     PATHWAY_IDS = "Pathway_IDs"
     PATHWAY_NAMES = "Pathway_Names"
     PATHWAY_CLASSES = "Pathway_Classes"

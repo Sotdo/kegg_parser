@@ -75,11 +75,14 @@ Terminal classification labels without a KO or gene are skipped; shallow branche
 
 ### `pathway_gene_mapping`
 
-`Gene_ID`, `Pathway_ID`, `Pathway_Name`, `Pathway_Class` — one row per unique gene/pathway pair.
+`Gene_ID`, `Gene_Symbol`, `Gene_Description`, `Pathway_ID`, `Pathway_Name`, `Pathway_Class` — one row
+per unique gene/pathway pair. Gene symbol and description are resolved from the KEGG `list/<org>` gene
+list (cached under `raw/pathway/<org>_gene_list.txt`).
 
 ### `gene_pathway_summary`
 
-`Gene_ID`, `Pathway_IDs`, `Pathway_Names`, `Pathway_Classes` (`;`-joined) plus `Pathway_Count`.
+`Gene_ID`, `Gene_Symbol`, `Gene_Description`, `Pathway_IDs`, `Pathway_Names`, `Pathway_Classes`
+(`;`-joined) plus `Pathway_Count`.
 
 ## Project structure
 

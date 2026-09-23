@@ -6,7 +6,7 @@ Retrieve organism-specific pathway annotations through
 ``bioservices.kegg.KEGG`` and turn them into two gene-centric tables:
 
 - ``pathway_gene_mapping``: one row per ``(Gene_ID, Pathway_ID)`` association,
-  enriched with the pathway name and its KEGG BRITE class.
+  enriched with the gene symbol/description and the pathway name and class.
 - ``gene_pathway_summary``: one row per ``Gene_ID`` with all pathway ids,
   names and classes aggregated into semicolon-separated strings.
 
@@ -106,6 +106,14 @@ def _fetch_pathway_class(client: KEGG) -> str:
     return client.get(PATHWAY_CLASS_FILE_ID) or ""
 
 
+@retry_with_backoff()
+def _fetch_gene_list(client: KEGG, org: str) -> str:
+    """Fetch ``list/<org>`` (all genes with symbol and definition) from KEGG."""
+    polite_delay()
+    logger.info(f"Requesting KEGG gene list for organism '{org}'")
+    return client.list(org) or ""
+
+
 def _strip_kegg_prefix(value: str) -> str:
     """Remove a leading KEGG database prefix such as ``path:`` or ``spo:``."""
     return value.split(":", 1)[1] if ":" in value else value
@@ -176,6 +184,23 @@ def parse_pathway_links(text: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def parse_gene_list(text: str) -> dict[str, tuple[str, str]]:
+    """Parse ``list/<org>`` text into a ``Gene_ID -> (Gene_Symbol, Gene_Description)`` mapping."""
+    genes: dict[str, tuple[str, str]] = {}
+    for line in text.splitlines():
+        fields = line.split("\t")
+        if len(fields) < 4:
+            continue
+        gene_id = _strip_kegg_prefix(fields[0].strip())
+        symbol_field, _, description = fields[3].partition(";")
+        aliases = [alias.strip() for alias in symbol_field.split(",") if alias.strip()]
+        symbol = aliases[0] if aliases else ""
+        if gene_id:
+            genes[gene_id] = (symbol, description.strip())
+    logger.info(f"Parsed gene names for {len(genes):,} genes")
+    return genes
+
+
 def parse_pathway_class(text: str) -> dict[str, str]:
     """Parse the ``br08901`` hierarchy into a ``map number -> 'Class A > Class B'`` mapping."""
     classes: dict[str, str] = {}
@@ -204,8 +229,8 @@ def fetch_and_cache_pathway_data(
     org: str,
     outdir: Path,
     force: bool = False,
-) -> tuple[dict[str, str], list[tuple[str, str]], dict[str, str]]:
-    """Fetch (with caching) and parse the pathway list, links and class hierarchy."""
+) -> tuple[dict[str, str], list[tuple[str, str]], dict[str, str], dict[str, tuple[str, str]]]:
+    """Fetch (with caching) and parse the pathway list, links, class hierarchy and gene names."""
     client = _create_kegg_client(org)
     raw_dir = ensure_dir(outdir / RAW_DIRNAME / RAW_PATHWAY_SUBDIR)
 
@@ -218,26 +243,35 @@ def fetch_and_cache_pathway_data(
     class_text = _download_cached_text(
         raw_dir / "br08901_pathway_class.txt", force, lambda: _fetch_pathway_class(client), "pathway class hierarchy"
     )
+    gene_text = _download_cached_text(
+        raw_dir / f"{org}_gene_list.txt", force, lambda: _fetch_gene_list(client, org), "gene list"
+    )
 
     names = parse_pathway_list(list_text)
     links = parse_pathway_links(links_text)
     classes = parse_pathway_class(class_text)
-    return names, links, classes
+    genes = parse_gene_list(gene_text)
+    return names, links, classes, genes
 
 
 def build_pathway_gene_mapping(
     pathway_names: dict[str, str],
     links: list[tuple[str, str]],
     pathway_classes: dict[str, str],
+    gene_names: dict[str, tuple[str, str]] | None = None,
 ) -> pd.DataFrame:
-    """Build the deduplicated gene-to-pathway mapping table."""
+    """Build the deduplicated gene-to-pathway mapping table enriched with gene names."""
+    gene_names = gene_names or {}
     records: list[dict[str, str]] = []
     for gene_id, pathway_id in links:
         number_match = PATHWAY_NUMBER_PATTERN.search(pathway_id)
         map_number = number_match.group(1) if number_match else ""
+        symbol, description = gene_names.get(gene_id, ("", ""))
         records.append(
             {
                 "Gene_ID": gene_id,
+                "Gene_Symbol": symbol,
+                "Gene_Description": description,
                 "Pathway_ID": pathway_id,
                 "Pathway_Name": pathway_names.get(pathway_id, ""),
                 "Pathway_Class": pathway_classes.get(map_number, ""),
@@ -253,6 +287,11 @@ def _join_unique(series: pd.Series) -> str:
     return MULTI_VALUE_SEPARATOR.join(sorted({str(value) for value in series if value}))
 
 
+def _first_value(series: pd.Series) -> str:
+    """Return the first non-empty value of a Series."""
+    return next((str(value) for value in series if value), "")
+
+
 def build_gene_pathway_summary(mapping: pd.DataFrame) -> pd.DataFrame:
     """Aggregate the mapping table into one row per gene."""
     if mapping.empty:
@@ -262,6 +301,8 @@ def build_gene_pathway_summary(mapping: pd.DataFrame) -> pd.DataFrame:
     grouped = (
         mapping.groupby("Gene_ID", sort=True)
         .agg(
+            Gene_Symbol=("Gene_Symbol", _first_value),
+            Gene_Description=("Gene_Description", _first_value),
             Pathway_IDs=("Pathway_ID", _join_unique),
             Pathway_Names=("Pathway_Name", _join_unique),
             Pathway_Classes=("Pathway_Class", _join_unique),
@@ -283,8 +324,8 @@ def process_pathways(
 ) -> tuple[Path, Path]:
     """Fetch, parse and persist the pathway mapping and gene summary tables."""
     logger.info(f"Processing KEGG PATHWAY data for organism '{org}'")
-    names, links, classes = fetch_and_cache_pathway_data(org, outdir, force=force)
-    mapping = build_pathway_gene_mapping(names, links, classes)
+    names, links, classes, genes = fetch_and_cache_pathway_data(org, outdir, force=force)
+    mapping = build_pathway_gene_mapping(names, links, classes, genes)
     summary = build_gene_pathway_summary(mapping)
 
     derived_dir = outdir / DERIVED_DIRNAME
