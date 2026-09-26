@@ -75,7 +75,6 @@ from kegg_parser.utils import (
 KO_ID_PATTERN = re.compile(r"^(K\d{5})\b")
 SPECIES_PREFIX_PATTERN = re.compile(r"^[A-Za-z]{2,5}:")
 EC_PATTERN = re.compile(r"\[EC:([0-9][0-9.\- ]*)\]")
-PATHWAY_PATTERN = re.compile(r"\[PATH:([^\]]+)\]")
 
 
 # =============================================================================
@@ -280,15 +279,7 @@ def flatten_brite_json(path: Path, brite_id: str) -> pd.DataFrame:
 def fetch_and_flatten_brite(brite_id: str, outdir: Path, force: bool = False) -> pd.DataFrame:
     """Download (with cache) and flatten a single BRITE tree."""
     json_path = download_brite_json(brite_id, outdir, force=force)
-    frame = flatten_brite_json(json_path, brite_id)
-
-    if not frame.empty:
-        pathway_ids = (
-            frame["Level_C"].str.extract(PATHWAY_PATTERN, expand=False).dropna().unique().tolist()
-        )
-        if pathway_ids:
-            logger.debug(f"BRITE '{brite_id}' references {len(pathway_ids)} pathway(s) in Level_C")
-    return frame
+    return flatten_brite_json(json_path, brite_id)
 
 
 @logger.catch(reraise=True)

@@ -2,9 +2,9 @@
 KEGG REST Plumbing
 ==================
 
-Shared KEGG REST plumbing used by the PATHWAY and MODULE extractors: cached
-HTTP text fetching, KEGG prefix stripping, tabular text parsing, the organism
-gene-name list, and small per-gene aggregation helpers.
+Shared KEGG REST plumbing used by the PATHWAY extractor: cached HTTP text
+fetching, KEGG prefix stripping, tabular text parsing, the organism gene-name
+list, and small per-gene aggregation helpers.
 
 This is a library module: it exposes helpers only, with no CLI.
 

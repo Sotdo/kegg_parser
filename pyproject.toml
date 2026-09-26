@@ -16,7 +16,6 @@ dependencies = [
     "stamina>=24.2",
     "pandas>=2.2",
     "loguru>=0.7",
-    "click>=8.1",
     "pyarrow>=15",
 ]
 

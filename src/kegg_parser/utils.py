@@ -9,15 +9,14 @@ Reusable helpers shared by the ``kegg_parser`` modules:
   flaky network calls.
 - Polite request pacing to respect KEGG's rate limits.
 - HTTP fetching via ``httpx``.
-- Atomic writers for raw payloads and a table writer/reader that supports both
-  TSV and Parquet outputs.
+- Atomic writers for raw payloads and a table writer that supports both TSV and
+  Parquet outputs.
 
 This is a library module: it exposes utilities only, with no CLI.
 
 Output
 ------
 - ``Path`` objects pointing at raw cache files and written tables.
-- ``pandas.DataFrame`` objects read back from disk.
 
 Author: Yusheng Yang (guidance) + Agent (implementation)
 Date:   2026-09-22
@@ -174,12 +173,3 @@ def write_table(frame: pd.DataFrame, stem_path: Path, fmt: OutputFormat | str = 
         frame.to_csv(output_path, sep="\t", index=False, na_rep=NA_VALUE)
     logger.info(f"Wrote {len(frame):,} rows x {len(frame.columns)} columns to {output_path}")
     return output_path
-
-
-def read_table(path: Path, fmt: OutputFormat | str | None = None) -> pd.DataFrame:
-    """Read a TSV or Parquet table, inferring the format from the suffix when omitted."""
-    path = Path(path)
-    resolved = OutputFormat(fmt) if fmt is not None else OutputFormat(path.suffix.lstrip("."))
-    if resolved is OutputFormat.PARQUET:
-        return pd.read_parquet(path)
-    return pd.read_csv(path, sep="\t", keep_default_na=False, na_values=[NA_VALUE])
