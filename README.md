@@ -1,16 +1,15 @@
 # kegg_parser
 
-Fetch and flatten **KEGG BRITE** hierarchy trees and **KEGG PATHWAY** / **KEGG MODULE**
+Fetch and flatten **KEGG BRITE** hierarchy trees and **KEGG PATHWAY**
 annotations for a given organism (e.g. `spo`, `hsa`, `eco`) into gene-centric **TSV** or **Parquet**
 tables.
 
-The package handles three data products:
+The package handles two data products:
 
 | Product | Source | Output |
 |---|---|---|
 | BRITE | `download_htext?format=json` | `derived/brite_flat.<fmt>` |
-| PATHWAY | `bioservices.kegg.KEGG` | `derived/pathway_gene_mapping.<fmt>`, `derived/gene_pathway_summary.<fmt>` |
-| MODULE | `bioservices.kegg.KEGG` | `derived/module_gene_mapping.<fmt>`, `derived/gene_module_summary.<fmt>` |
+| PATHWAY | KEGG REST API | `derived/pathway_gene_mapping.<fmt>`, `derived/gene_pathway_summary.<fmt>` |
 
 Raw KEGG responses are cached under `<outdir>/raw/` so repeated runs avoid re-querying the API.
 
@@ -41,9 +40,6 @@ mamba run -n kegg_parser python scripts/fetch_brite.py \
 
 # Only PATHWAY
 mamba run -n kegg_parser python scripts/fetch_pathway.py --org spo
-
-# Only MODULE
-mamba run -n kegg_parser python scripts/fetch_module.py --org spo
 ```
 
 ### CLI arguments
@@ -87,17 +83,6 @@ prefix is stripped from `Gene_Symbol`.
 `Gene_ID`, `Gene_Symbol`, `Gene_Description`, `Pathway_IDs`, `Pathway_Names`, `Pathway_Classes`
 (`;`-joined) plus `Pathway_Count`.
 
-### `module_gene_mapping`
-
-`Gene_ID`, `Gene_Symbol`, `Gene_Description`, `Module_ID`, `Module_Name`, `Module_Class` — one row
-per unique gene/module pair. Module names come from the global `list/module` endpoint and classes
-from the `br:ko00002` hierarchy.
-
-### `gene_module_summary`
-
-`Gene_ID`, `Gene_Symbol`, `Gene_Description`, `Module_IDs`, `Module_Names`, `Module_Classes`
-(`;`-joined) plus `Module_Count`.
-
 ## Project structure
 
 ```
@@ -108,14 +93,12 @@ kegg_parser/
 ├── src/kegg_parser/
 │   ├── config.py     # endpoints, delays, retry policy, column enums
 │   ├── utils.py      # logging, retry decorator, pacing, table I/O
-│   ├── kegg_rest.py  # shared bioservices client, caching, TSV/gene-list parsing
+│   ├── kegg_rest.py  # shared KEGG REST client, caching, TSV/gene-list parsing
 │   ├── brite.py      # BRITE download, tree traversal, flattening
-│   ├── pathway.py    # bioservices PATHWAY fetching and aggregation
-│   └── module.py     # bioservices MODULE fetching and aggregation
+│   └── pathway.py    # PATHWAY fetching and aggregation
 ├── scripts/
 │   ├── fetch_brite.py
 │   ├── fetch_pathway.py
-│   ├── fetch_module.py
 │   └── run_kegg_pipeline.py
 └── tests/
 ```
@@ -124,11 +107,11 @@ kegg_parser/
 
 ```python
 from pathlib import Path
-from kegg_parser import process_brite_trees, process_pathways, process_modules, OutputFormat
+from kegg_parser import process_brite_trees, process_pathways, OutputFormat
 
-process_brite_trees("spo", Path("data/spo"), fmt=OutputFormat.PARQUET)
-process_pathways("spo", Path("data/spo"), fmt=OutputFormat.PARQUET)
-process_modules("spo", Path("data/spo"), fmt=OutputFormat.PARQUET)
+outdir = Path("data/spo")
+process_brite_trees("spo", outdir, fmt=OutputFormat.PARQUET)
+process_pathways("spo", outdir, fmt=OutputFormat.PARQUET)
 ```
 
 ## Rate limiting & retries

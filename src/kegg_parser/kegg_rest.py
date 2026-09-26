@@ -2,16 +2,16 @@
 KEGG REST Plumbing
 ==================
 
-Shared bioservices-based plumbing used by the PATHWAY and MODULE extractors:
-KEGG client creation, cached text fetching, KEGG prefix stripping, tabular text
-parsing, the organism gene-name list, and small per-gene aggregation helpers.
+Shared KEGG REST plumbing used by the PATHWAY and MODULE extractors: cached
+HTTP text fetching, KEGG prefix stripping, tabular text parsing, the organism
+gene-name list, and small per-gene aggregation helpers.
 
 This is a library module: it exposes helpers only, with no CLI.
 
 Output
 ------
-- ``bioservices.kegg.KEGG`` client instances.
-- Parsed dictionaries / lists / ``pandas.DataFrame`` objects and cached raw text.
+- Decoded KEGG REST response text, cached under ``<outdir>/raw/``.
+- Parsed dictionaries / lists / ``pandas.DataFrame`` objects.
 
 Author: Yusheng Yang (guidance) + Agent (implementation)
 Date:   2026-09-23
@@ -23,7 +23,6 @@ Version: 1.0.0
 # =============================================================================
 # Standard library
 import io
-import logging
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -31,17 +30,17 @@ from pathlib import Path
 import pandas as pd
 
 # Third-party
-from bioservices import KEGG
 from loguru import logger
 
 # Project imports
 from kegg_parser.config import (
+    KEGG_REST_BASE,
     MULTI_VALUE_SEPARATOR,
     RAW_DIRNAME,
     RAW_GENE_SUBDIR,
     TEXT_ENCODING,
 )
-from kegg_parser.utils import atomic_write_text, polite_delay, retryable, strip_systematic_prefix
+from kegg_parser.utils import atomic_write_text, http_get_bytes, strip_systematic_prefix
 
 # =============================================================================
 # GLOBAL CONSTANTS & ENUMS
@@ -52,24 +51,17 @@ GENE_LIST_FILENAME_TEMPLATE = "{org}_gene_list.txt"
 # =============================================================================
 # CORE LOGIC
 # =============================================================================
-def create_kegg_client(org: str) -> KEGG:
-    """Instantiate a bioservices KEGG client with the organism cache pre-seeded."""
-    logging.getLogger("bioservices").setLevel(logging.ERROR)
-    client = KEGG()
-    # KEGG retired the `list/organism` endpoint that bioservices queries to validate
-    # organism codes. Seeding its private caches lets `list()`/`link()` work without
-    # that lookup while keeping `get()` fully functional.
-    client._organisms = [org]
-    client._organisms_tnumbers = [org]
-    return client
+def fetch_kegg_text(endpoint: str) -> str:
+    """Fetch a KEGG REST endpoint (path after the base URL) and decode the response text."""
+    logger.debug(f"Requesting KEGG REST endpoint '{endpoint}'")
+    payload = http_get_bytes(f"{KEGG_REST_BASE}/{endpoint}")
+    return payload.decode(TEXT_ENCODING, errors="replace")
 
 
-@retryable
-def fetch_gene_list(client: KEGG, org: str) -> str:
+def fetch_gene_list(org: str) -> str:
     """Fetch ``list/<org>`` (all genes with symbol and definition) from KEGG."""
-    polite_delay()
     logger.info(f"Requesting KEGG gene list for organism '{org}'")
-    return client.list(org) or ""
+    return fetch_kegg_text(f"list/{org}")
 
 
 def gene_list_cache_path(outdir: Path, org: str) -> Path:

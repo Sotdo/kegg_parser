@@ -65,8 +65,8 @@ from kegg_parser.config import (
 # =============================================================================
 # GLOBAL CONSTANTS & ENUMS
 # =============================================================================
-# ``requests`` (used internally by bioservices) subclasses IOError/OSError, so
-# this tuple also covers bioservices network failures.
+# ``httpx.HTTPError`` covers transport and status failures; ``OSError`` is kept
+# for low-level socket errors surfaced by the underlying network stack.
 RETRYABLE_EXCEPTIONS: tuple[type[Exception], ...] = (httpx.HTTPError, OSError)
 
 

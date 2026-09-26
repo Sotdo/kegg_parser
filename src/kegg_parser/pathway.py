@@ -2,8 +2,8 @@
 KEGG PATHWAY Fetching and Mapping
 =================================
 
-Retrieve organism-specific pathway annotations through
-``bioservices.kegg.KEGG`` and turn them into two gene-centric tables:
+Retrieve organism-specific pathway annotations through the KEGG REST API and
+turn them into two gene-centric tables:
 
 - ``pathway_gene_mapping``: one row per ``(Gene_ID, Pathway_ID)`` association,
   enriched with the gene symbol/description and the pathway name and class.
@@ -22,8 +22,8 @@ Output
 - Two table files written under ``<outdir>/derived/`` by ``process_pathways``.
 
 Author: Yusheng Yang (guidance) + Agent (implementation)
-Date:   2026-09-22
-Version: 1.0.0
+Date:   2026-09-24
+Version: 2.0.0
 """
 
 # =============================================================================
@@ -38,7 +38,6 @@ from pathlib import Path
 import pandas as pd
 
 # Third-party
-from bioservices import KEGG
 from loguru import logger
 
 # Project imports
@@ -54,9 +53,9 @@ from kegg_parser.config import (
     OutputFormat,
 )
 from kegg_parser.kegg_rest import (
-    create_kegg_client,
     download_cached_text,
     fetch_gene_list,
+    fetch_kegg_text,
     first_value,
     gene_list_cache_path,
     join_unique,
@@ -64,7 +63,7 @@ from kegg_parser.kegg_rest import (
     read_kegg_tsv,
     strip_kegg_prefix,
 )
-from kegg_parser.utils import ensure_dir, polite_delay, retryable, write_table
+from kegg_parser.utils import ensure_dir, write_table
 
 # =============================================================================
 # GLOBAL CONSTANTS & ENUMS
@@ -77,28 +76,22 @@ PATHWAY_CLASS_FILE_ID = "br:br08901"
 # =============================================================================
 # CORE LOGIC
 # =============================================================================
-@retryable
-def _fetch_pathway_list(client: KEGG, org: str) -> str:
+def _fetch_pathway_list(org: str) -> str:
     """Fetch ``list/pathway/<org>`` from KEGG."""
-    polite_delay()
     logger.info(f"Requesting KEGG pathway list for organism '{org}'")
-    return client.list("pathway", org) or ""
+    return fetch_kegg_text(f"list/pathway/{org}")
 
 
-@retryable
-def _fetch_pathway_links(client: KEGG, org: str) -> str:
+def _fetch_pathway_links(org: str) -> str:
     """Fetch ``link/pathway/<org>`` (gene to pathway associations) from KEGG."""
-    polite_delay()
     logger.info(f"Requesting KEGG pathway-gene links for organism '{org}'")
-    return client.link("pathway", org) or ""
+    return fetch_kegg_text(f"link/pathway/{org}")
 
 
-@retryable
-def _fetch_pathway_class(client: KEGG) -> str:
+def _fetch_pathway_class() -> str:
     """Fetch the global ``br08901`` pathway hierarchy used to classify pathways."""
-    polite_delay()
     logger.info(f"Requesting KEGG pathway hierarchy '{PATHWAY_CLASS_FILE_ID}'")
-    return client.get(PATHWAY_CLASS_FILE_ID) or ""
+    return fetch_kegg_text(f"get/{PATHWAY_CLASS_FILE_ID}")
 
 
 def _strip_common_organism_suffix(names: dict[str, str]) -> None:
@@ -174,20 +167,19 @@ def fetch_and_cache_pathway_data(
     force: bool = False,
 ) -> tuple[dict[str, str], list[tuple[str, str]], dict[str, str], dict[str, tuple[str, str]]]:
     """Fetch (with caching) and parse the pathway list, links, class hierarchy and gene names."""
-    client = create_kegg_client(org)
     raw_dir = ensure_dir(outdir / RAW_DIRNAME / RAW_PATHWAY_SUBDIR)
 
     list_text = download_cached_text(
-        raw_dir / f"{org}_pathway_list.txt", force, lambda: _fetch_pathway_list(client, org), "pathway list"
+        raw_dir / f"{org}_pathway_list.txt", force, lambda: _fetch_pathway_list(org), "pathway list"
     )
     links_text = download_cached_text(
-        raw_dir / f"{org}_pathway_links.txt", force, lambda: _fetch_pathway_links(client, org), "pathway-gene links"
+        raw_dir / f"{org}_pathway_links.txt", force, lambda: _fetch_pathway_links(org), "pathway-gene links"
     )
     class_text = download_cached_text(
-        raw_dir / "br08901_pathway_class.txt", force, lambda: _fetch_pathway_class(client), "pathway class hierarchy"
+        raw_dir / "br08901_pathway_class.txt", force, _fetch_pathway_class, "pathway class hierarchy"
     )
     gene_text = download_cached_text(
-        gene_list_cache_path(outdir, org), force, lambda: fetch_gene_list(client, org), "gene list"
+        gene_list_cache_path(outdir, org), force, lambda: fetch_gene_list(org), "gene list"
     )
 
     names = parse_pathway_list(list_text)

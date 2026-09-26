@@ -12,5 +12,4 @@ dependencies:
   - click>=8.1
   - pytest>=8.0
   - pip:
-      - bioservices>=1.11
       - -e .

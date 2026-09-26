@@ -15,10 +15,10 @@ Version: 1.0.0
 # IMPORTS
 # =============================================================================
 from kegg_parser.config import GENE_SUMMARY_COLUMNS, PATHWAY_MAPPING_COLUMNS
+from kegg_parser.kegg_rest import parse_gene_list
 from kegg_parser.pathway import (
     build_gene_pathway_summary,
     build_pathway_gene_mapping,
-    parse_gene_list,
     parse_pathway_class,
     parse_pathway_links,
     parse_pathway_list,

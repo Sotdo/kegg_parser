@@ -4,7 +4,7 @@
 Fetch and Summarise KEGG PATHWAY Annotations
 ============================================
 
-Retrieve organism-specific pathway annotations via ``bioservices.kegg.KEGG``
+Retrieve organism-specific pathway annotations via the KEGG REST API
 and build two gene-centric tables:
 
 - A gene-to-pathway mapping table (one row per ``Gene_ID``/``Pathway_ID`` pair)

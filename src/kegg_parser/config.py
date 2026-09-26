@@ -60,14 +60,11 @@ RAW_DIRNAME = "raw"
 DERIVED_DIRNAME = "derived"
 RAW_BRITE_SUBDIR = "brite"
 RAW_PATHWAY_SUBDIR = "pathway"
-RAW_MODULE_SUBDIR = "module"
 RAW_GENE_SUBDIR = "gene"
 
 BRITE_TABLE_STEM = "brite_flat"
 PATHWAY_MAPPING_STEM = "pathway_gene_mapping"
 GENE_SUMMARY_STEM = "gene_pathway_summary"
-MODULE_MAPPING_STEM = "module_gene_mapping"
-GENE_MODULE_SUMMARY_STEM = "gene_module_summary"
 
 # --- Missing value / encoding conventions ------------------------------------
 NA_VALUE = ""
@@ -124,31 +121,6 @@ class GeneSummaryColumn(StrEnum):
     PATHWAY_COUNT = "Pathway_Count"
 
 
-class ModuleMappingColumn(StrEnum):
-    """Column names of the gene-to-module mapping table."""
-
-    GENE_ID = "Gene_ID"
-    GENE_SYMBOL = "Gene_Symbol"
-    GENE_DESCRIPTION = "Gene_Description"
-    MODULE_ID = "Module_ID"
-    MODULE_NAME = "Module_Name"
-    MODULE_CLASS = "Module_Class"
-
-
-class GeneModuleSummaryColumn(StrEnum):
-    """Column names of the per-gene module aggregation table."""
-
-    GENE_ID = "Gene_ID"
-    GENE_SYMBOL = "Gene_Symbol"
-    GENE_DESCRIPTION = "Gene_Description"
-    MODULE_IDS = "Module_IDs"
-    MODULE_NAMES = "Module_Names"
-    MODULE_CLASSES = "Module_Classes"
-    MODULE_COUNT = "Module_Count"
-
-
 BRITE_COLUMNS: list[str] = [member.value for member in BriteColumn]
 PATHWAY_MAPPING_COLUMNS: list[str] = [member.value for member in PathwayMappingColumn]
 GENE_SUMMARY_COLUMNS: list[str] = [member.value for member in GeneSummaryColumn]
-MODULE_MAPPING_COLUMNS: list[str] = [member.value for member in ModuleMappingColumn]
-GENE_MODULE_SUMMARY_COLUMNS: list[str] = [member.value for member in GeneModuleSummaryColumn]
