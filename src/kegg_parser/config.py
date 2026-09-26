@@ -90,6 +90,7 @@ class BriteColumn(StrEnum):
     LEVEL_C = "Level_C"
     LEVEL_D = "Level_D"
     LEVEL_E = "Level_E"
+    LEVEL_F = "Level_F"
     KO_ID = "KO_ID"
     KO_NAME = "KO_Name"
     GENE_ID = "Gene_ID"
@@ -106,7 +107,8 @@ class PathwayMappingColumn(StrEnum):
     GENE_DESCRIPTION = "Gene_Description"
     PATHWAY_ID = "Pathway_ID"
     PATHWAY_NAME = "Pathway_Name"
-    PATHWAY_CLASS = "Pathway_Class"
+    LEVEL_A = "Level_A"
+    LEVEL_B = "Level_B"
 
 
 class GeneSummaryColumn(StrEnum):
@@ -117,7 +119,8 @@ class GeneSummaryColumn(StrEnum):
     GENE_DESCRIPTION = "Gene_Description"
     PATHWAY_IDS = "Pathway_IDs"
     PATHWAY_NAMES = "Pathway_Names"
-    PATHWAY_CLASSES = "Pathway_Classes"
+    LEVEL_AS = "Level_As"
+    LEVEL_BS = "Level_Bs"
     PATHWAY_COUNT = "Pathway_Count"
 
 

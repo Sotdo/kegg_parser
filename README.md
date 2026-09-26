@@ -62,25 +62,26 @@ One row per terminal node that resolves to a gene or KO entry.
 | Column | Meaning |
 |---|---|
 | `BRITE_ID` | Source tree id (e.g. `spo00001`). |
-| `Level_A` / `Level_B` / `Level_C` | Ancestor labels from the root downward. Any classification deeper than three levels is joined into `Level_C` with `" > "`. |
-| `Level_D` | KO entry text (`K00844 HK; hexokinase [EC:2.7.1.1]`). |
-| `Level_E` | Organism gene entry text (`2542634 hxk1; hexokinase 1`). |
-| `KO_ID` / `KO_Name` | Parsed from `Level_D`. |
-| `Gene_ID` / `Gene_Symbol` / `Gene_Description` | Parsed from `Level_E`; the KEGG/species prefix is stripped from `Gene_ID` and the `SPOM_` systematic-name prefix from `Gene_Symbol`. |
+| `Level_A` / `Level_B` / `Level_C` / `Level_D` | Ancestor labels from the root downward. Any classification deeper than four levels is joined into `Level_D` with `" > "`; empty classification levels are forward-filled with the previous level so A–D are gap-free. |
+| `Level_E` | KO entry text (`K00844 HK; hexokinase [EC:2.7.1.1]`). |
+| `Level_F` | Organism gene entry text (`2542634 hxk1; hexokinase 1`). |
+| `KO_ID` / `KO_Name` | Parsed from `Level_E`. |
+| `Gene_ID` / `Gene_Symbol` / `Gene_Description` | Parsed from `Level_F`; the KEGG/species prefix is stripped from `Gene_ID` and the `SPOM_` systematic-name prefix from `Gene_Symbol`. |
 | `EC_Number` | All EC numbers found in the leaf, `;`-joined. |
 
 Terminal classification labels without a KO or gene are skipped; shallow branches never raise.
 
 ### `pathway_gene_mapping`
 
-`Gene_ID`, `Gene_Symbol`, `Gene_Description`, `Pathway_ID`, `Pathway_Name`, `Pathway_Class` — one row
-per unique gene/pathway pair. Gene symbol and description are resolved from the shared KEGG
+`Gene_ID`, `Gene_Symbol`, `Gene_Description`, `Pathway_ID`, `Pathway_Name`, `Level_A`, `Level_B` — one row
+per unique gene/pathway pair. `Level_A` / `Level_B` are the two levels of the KEGG pathway class
+(from `br08901`). Gene symbol and description are resolved from the shared KEGG
 `list/<org>` gene list (cached under `raw/gene/<org>_gene_list.txt`); the `SPOM_` systematic-name
 prefix is stripped from `Gene_Symbol`.
 
 ### `gene_pathway_summary`
 
-`Gene_ID`, `Gene_Symbol`, `Gene_Description`, `Pathway_IDs`, `Pathway_Names`, `Pathway_Classes`
+`Gene_ID`, `Gene_Symbol`, `Gene_Description`, `Pathway_IDs`, `Pathway_Names`, `Level_As`, `Level_Bs`
 (`;`-joined) plus `Pathway_Count`.
 
 ## Project structure

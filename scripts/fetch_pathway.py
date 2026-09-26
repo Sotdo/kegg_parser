@@ -17,9 +17,9 @@ Raw KEGG responses are cached under ``<outdir>/raw/pathway/``.
 Output
 ------
 - ``<outdir>/derived/pathway_gene_mapping.tsv`` (or ``.parquet``) with columns
-  ``Gene_ID, Pathway_ID, Pathway_Name, Pathway_Class``.
+  ``Gene_ID, Gene_Symbol, Gene_Description, Pathway_ID, Pathway_Name, Level_A, Level_B``.
 - ``<outdir>/derived/gene_pathway_summary.tsv`` (or ``.parquet``) with columns
-  ``Gene_ID, Pathway_IDs, Pathway_Names, Pathway_Classes, Pathway_Count``.
+  ``Gene_ID, Gene_Symbol, Gene_Description, Pathway_IDs, Pathway_Names, Level_As, Level_Bs, Pathway_Count``.
 
 Usage
 -----

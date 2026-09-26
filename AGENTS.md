@@ -9,7 +9,7 @@ All tooling lives in the `kegg_parser` mamba/conda env (Python 3.12). The system
 `python` does **not** have the deps — always prefix commands:
 
 ```bash
-mamba run -n kegg_parser python -m pytest              # full suite (22 offline tests)
+mamba run -n kegg_parser python -m pytest              # full suite (18 offline tests)
 mamba run -n kegg_parser python -m pytest tests/test_brite.py::test_flatten_brite_tree_parses_levels_and_fields
 mamba run -n kegg_parser python -m ruff check .        # lint (must pass)
 mamba run -n kegg_parser python scripts/run_kegg_pipeline.py --org spo   # full pipeline

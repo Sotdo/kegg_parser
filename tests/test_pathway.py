@@ -67,10 +67,10 @@ def test_parse_pathway_links_strips_prefixes() -> None:
 
 
 def test_parse_pathway_class_builds_hierarchy() -> None:
-    """The br08901 hierarchy yields 'A > B' class strings per map number."""
+    """The br08901 hierarchy yields (Level_A, Level_B) tuples per map number."""
     classes = parse_pathway_class(CLASS_TEXT)
-    assert classes["01100"] == "Metabolism > Global and overview maps"
-    assert classes["00010"] == "Metabolism > Carbohydrate metabolism"
+    assert classes["01100"] == ("Metabolism", "Global and overview maps")
+    assert classes["00010"] == ("Metabolism", "Carbohydrate metabolism")
 
 
 def test_parse_gene_list_extracts_symbol_and_description() -> None:
@@ -95,7 +95,8 @@ def test_build_mapping_and_summary() -> None:
     assert row["Gene_Symbol"] == "tpi1"
     assert row["Gene_Description"] == "triosephosphate isomerase"
     assert row["Pathway_Name"] == "Glycolysis / Gluconeogenesis"
-    assert row["Pathway_Class"] == "Metabolism > Carbohydrate metabolism"
+    assert row["Level_A"] == "Metabolism"
+    assert row["Level_B"] == "Carbohydrate metabolism"
 
     summary = build_gene_pathway_summary(mapping)
     assert list(summary.columns) == GENE_SUMMARY_COLUMNS
@@ -104,6 +105,8 @@ def test_build_mapping_and_summary() -> None:
     assert gene_row["Gene_Description"] == "triosephosphate isomerase"
     assert gene_row["Pathway_Count"] == 2
     assert gene_row["Pathway_IDs"] == "spo00010;spo01100"
+    assert gene_row["Level_As"] == "Metabolism"
+    assert gene_row["Level_Bs"] == "Carbohydrate metabolism;Global and overview maps"
 
 
 def test_build_gene_pathway_summary_empty() -> None:

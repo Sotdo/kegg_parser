@@ -6,9 +6,10 @@ Retrieve organism-specific pathway annotations through the KEGG REST API and
 turn them into two gene-centric tables:
 
 - ``pathway_gene_mapping``: one row per ``(Gene_ID, Pathway_ID)`` association,
-  enriched with the gene symbol/description and the pathway name and class.
+  enriched with the gene symbol/description, the pathway name and the two-level
+  KEGG pathway class (``Level_A`` / ``Level_B``).
 - ``gene_pathway_summary``: one row per ``Gene_ID`` with all pathway ids,
-  names and classes aggregated into semicolon-separated strings.
+  names and class levels aggregated into semicolon-separated strings.
 
 Raw responses are cached under ``<outdir>/raw/pathway/`` so repeated runs avoid
 re-querying the KEGG REST API.
@@ -137,9 +138,9 @@ def parse_pathway_links(text: str) -> list[tuple[str, str]]:
     return pairs
 
 
-def parse_pathway_class(text: str) -> dict[str, str]:
-    """Parse the ``br08901`` hierarchy into a ``map number -> 'Class A > Class B'`` mapping."""
-    classes: dict[str, str] = {}
+def parse_pathway_class(text: str) -> dict[str, tuple[str, str]]:
+    """Parse the ``br08901`` hierarchy into a ``map number -> (Level_A, Level_B)`` mapping."""
+    classes: dict[str, tuple[str, str]] = {}
     current_a = ""
     current_b = ""
     for line in text.splitlines():
@@ -155,8 +156,7 @@ def parse_pathway_class(text: str) -> dict[str, str]:
             case "C":
                 class_match = PATHWAY_CLASS_LINE_PATTERN.match(line[1:].strip())
                 if class_match:
-                    parts = [part for part in (current_a, current_b) if part]
-                    classes[class_match.group(1)] = " > ".join(parts)
+                    classes[class_match.group(1)] = (current_a, current_b)
     logger.info(f"Parsed pathway class for {len(classes):,} map numbers")
     return classes
 
@@ -192,7 +192,7 @@ def fetch_and_cache_pathway_data(
 def build_pathway_gene_mapping(
     pathway_names: dict[str, str],
     links: list[tuple[str, str]],
-    pathway_classes: dict[str, str],
+    pathway_classes: dict[str, tuple[str, str]],
     gene_names: dict[str, tuple[str, str]] | None = None,
 ) -> pd.DataFrame:
     """Build the deduplicated gene-to-pathway mapping table enriched with gene names."""
@@ -201,6 +201,7 @@ def build_pathway_gene_mapping(
     for gene_id, pathway_id in links:
         number_match = PATHWAY_NUMBER_PATTERN.search(pathway_id)
         map_number = number_match.group(1) if number_match else ""
+        level_a, level_b = pathway_classes.get(map_number, ("", ""))
         symbol, description = gene_names.get(gene_id, ("", ""))
         records.append(
             {
@@ -209,7 +210,8 @@ def build_pathway_gene_mapping(
                 "Gene_Description": description,
                 "Pathway_ID": pathway_id,
                 "Pathway_Name": pathway_names.get(pathway_id, ""),
-                "Pathway_Class": pathway_classes.get(map_number, ""),
+                "Level_A": level_a,
+                "Level_B": level_b,
             }
         )
     frame = pd.DataFrame(records, columns=PATHWAY_MAPPING_COLUMNS).drop_duplicates().reset_index(drop=True)
@@ -230,7 +232,8 @@ def build_gene_pathway_summary(mapping: pd.DataFrame) -> pd.DataFrame:
             Gene_Description=("Gene_Description", first_value),
             Pathway_IDs=("Pathway_ID", join_unique),
             Pathway_Names=("Pathway_Name", join_unique),
-            Pathway_Classes=("Pathway_Class", join_unique),
+            Level_As=("Level_A", join_unique),
+            Level_Bs=("Level_B", join_unique),
             Pathway_Count=("Pathway_ID", "nunique"),
         )
         .reset_index()

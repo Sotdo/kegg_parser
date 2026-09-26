@@ -4,7 +4,8 @@ Unit tests for ``kegg_parser.brite``
 
 Exercise the recursive BRITE flattening logic on a synthetic tree that covers
 the real KEGG variations: tab-merged gene/KO leaves, KO-only leaves, reversed
-field order, shallow branches and pure classification labels.
+field order, shallow branches, forward-filled levels and pure classification
+labels.
 
 Author: Yusheng Yang (guidance) + Agent (implementation)
 Date:   2026-09-22
@@ -84,6 +85,9 @@ def test_flatten_brite_tree_parses_levels_and_fields() -> None:
     assert row["Level_A"] == "09100 Metabolism"
     assert row["Level_B"] == "09101 Carbohydrate metabolism"
     assert row["Level_C"] == "00010 Glycolysis / Gluconeogenesis [PATH:spo00010]"
+    assert row["Level_D"] == "00010 Glycolysis / Gluconeogenesis [PATH:spo00010]"
+    assert row["Level_E"] == "K00844 HK; hexokinase [EC:2.7.1.1]"
+    assert row["Level_F"] == "2542634 hxk1; hexokinase 1"
     assert row["KO_ID"] == "K00844"
     assert row["KO_Name"] == "HK; hexokinase [EC:2.7.1.1]"
     assert row["Gene_Symbol"] == "hxk1"
@@ -91,32 +95,66 @@ def test_flatten_brite_tree_parses_levels_and_fields() -> None:
     assert row["EC_Number"] == "2.7.1.1"
 
 
-def test_flatten_brite_tree_handles_shallow_branch() -> None:
-    """A gene leaf directly under Level_B must not raise and leaves Level_C empty."""
+def test_flatten_brite_tree_forward_fills_shallow_branch() -> None:
+    """A shallow gene leaf fills empty levels C/D with the previous level."""
     frame = flatten_brite_tree(SYNTHETIC_TREE, "spo00001")
     row = frame[frame["Gene_ID"] == "2539000"].iloc[0]
 
     assert row["Level_B"] == "09102 Energy metabolism"
-    assert row["Level_C"] == ""
+    assert row["Level_C"] == "09102 Energy metabolism"
+    assert row["Level_D"] == "09102 Energy metabolism"
+
+
+def test_flatten_brite_tree_forward_fills_empty_nodes() -> None:
+    """Empty intermediate classification nodes inherit the previous level."""
+    tree = {
+        "name": "spo00001",
+        "children": [
+            {
+                "name": "Top",
+                "children": [
+                    {
+                        "name": "",
+                        "children": [
+                            {
+                                "name": "Leaf",
+                                "children": [
+                                    {"name": "2542634 hxk1; hexokinase 1\tK00844 HK; hexokinase [EC:2.7.1.1]"}
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    frame = flatten_brite_tree(tree, "spo00001")
+    row = frame.iloc[0]
+    assert row["Level_A"] == "Top"
+    assert row["Level_B"] == "Top"
+    assert row["Level_C"] == "Leaf"
+    assert row["Level_D"] == "Leaf"
 
 
 def test_flatten_brite_tree_skips_pure_labels() -> None:
     """Classification labels without a KO or gene must be skipped."""
     frame = flatten_brite_tree(SYNTHETIC_TREE, "spo00001")
-    assert "Empty category leaf" not in set(frame["Level_E"])
+    assert "Empty category leaf" not in set(frame["Level_C"]) | set(frame["Level_D"])
     assert len(frame) == 5
 
 
 def test_flatten_brite_tree_keeps_ko_only_leaf() -> None:
-    """A leaf that only defines a KO is kept with an empty gene id."""
+    """A leaf that only defines a KO is kept with an empty gene id and Level_F."""
     frame = flatten_brite_tree(SYNTHETIC_TREE, "spo00001")
     row = frame[frame["KO_ID"] == "K99999"].iloc[0]
     assert row["Gene_ID"] == ""
     assert row["KO_Name"] == "SOME; enzyme absent from this organism"
+    assert row["Level_E"] == "K99999 SOME; enzyme absent from this organism"
+    assert row["Level_F"] == ""
 
 
-def test_flatten_brite_tree_joins_deep_levels_into_level_c() -> None:
-    """Trees deeper than A/B/C keep the extra classification inside Level_C."""
+def test_flatten_brite_tree_joins_deep_levels_into_level_d() -> None:
+    """Trees deeper than A/B/C/D keep the extra classification inside Level_D."""
     tree = {
         "name": "spo01000",
         "children": [
@@ -152,7 +190,8 @@ def test_flatten_brite_tree_joins_deep_levels_into_level_c() -> None:
     row = frame.iloc[0]
     assert row["Level_A"] == "1. Oxidoreductases"
     assert row["Level_B"] == "1.1 Acting on the CH-OH group of donors"
-    assert row["Level_C"] == "1.1.1 With NAD+ or NADP+ as acceptor > 1.1.1.1 alcohol dehydrogenase"
+    assert row["Level_C"] == "1.1.1 With NAD+ or NADP+ as acceptor"
+    assert row["Level_D"] == "1.1.1.1 alcohol dehydrogenase"
     assert row["KO_ID"] == "K13953"
     assert row["Gene_ID"] == "2538902"
 

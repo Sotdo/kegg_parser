@@ -9,13 +9,14 @@ recursively flatten each multi-branch tree into a gene-level table.
 
 Flattening rules
 ----------------
-- ``Level_A`` / ``Level_B`` / ``Level_C`` hold the ancestor labels from the root
-  downwards; any classification deeper than three levels is joined into
-  ``Level_C`` so no information is lost.
-- ``Level_D`` holds the KO entry text and ``Level_E`` the organism gene entry.
+- ``Level_A`` / ``Level_B`` / ``Level_C`` / ``Level_D`` hold the ancestor labels
+  from the root downwards; any classification deeper than four levels is joined
+  into ``Level_D`` so no information is lost. Empty classification levels are
+  forward-filled with the previous level so A-D are gap-free.
+- ``Level_E`` holds the KO entry text and ``Level_F`` the organism gene entry.
   When KEGG merges both into a tab-separated leaf, they are split apart.
-- ``KO_ID`` / ``KO_Name`` are parsed from ``Level_D``; ``Gene_ID`` /
-  ``Gene_Symbol`` / ``Gene_Description`` and ``EC_Number`` from ``Level_E``.
+- ``KO_ID`` / ``KO_Name`` are parsed from the KO entry; ``Gene_ID`` /
+  ``Gene_Symbol`` / ``Gene_Description`` and ``EC_Number`` from the gene entry.
 - Terminal nodes that are pure classification labels (no KO and no gene) are
   skipped, and shallow branches never raise index errors.
 
@@ -188,6 +189,22 @@ def _parse_ec(*texts: str) -> str:
     return ";".join(numbers)
 
 
+def _classification_levels(path: Sequence[str]) -> list[str]:
+    """Return classification levels A-D, joining deeper levels into D and forward-filling gaps."""
+    levels = [
+        path[0] if len(path) > 0 else "",
+        path[1] if len(path) > 1 else "",
+        path[2] if len(path) > 2 else "",
+        LEVEL_SEPARATOR.join(path[3:]) if len(path) > 3 else "",
+    ]
+    filled: list[str] = []
+    previous = ""
+    for level in levels:
+        previous = level or previous
+        filled.append(previous)
+    return filled
+
+
 def _build_leaf_record(name: str, path: Sequence[str], brite_id: str) -> dict[str, str] | None:
     """Build one gene-level record from a terminal node, or ``None`` when it is a label."""
     cleaned = (name or "").strip()
@@ -206,9 +223,7 @@ def _build_leaf_record(name: str, path: Sequence[str], brite_id: str) -> dict[st
     if not ko_text and not gene_text:
         return None
 
-    level_a = path[0] if len(path) > 0 else ""
-    level_b = path[1] if len(path) > 1 else ""
-    level_c = LEVEL_SEPARATOR.join(path[2:]) if len(path) > 2 else ""
+    level_a, level_b, level_c, level_d = _classification_levels(path)
 
     ko_id, ko_name = _parse_ko(ko_text)
     gene_id, gene_symbol, gene_description = _parse_gene(gene_text)
@@ -218,8 +233,9 @@ def _build_leaf_record(name: str, path: Sequence[str], brite_id: str) -> dict[st
         "Level_A": level_a,
         "Level_B": level_b,
         "Level_C": level_c,
-        "Level_D": ko_text,
-        "Level_E": gene_text,
+        "Level_D": level_d,
+        "Level_E": ko_text,
+        "Level_F": gene_text,
         "KO_ID": ko_id,
         "KO_Name": ko_name,
         "Gene_ID": gene_id,
