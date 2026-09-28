@@ -20,6 +20,7 @@ from kegg_parser.brite import (
     _parse_ec,
     _parse_gene,
     _parse_ko,
+    _parse_level_label,
     default_brite_ids,
     flatten_brite_tree,
     select_brite_ids,
@@ -82,10 +83,14 @@ def test_flatten_brite_tree_parses_levels_and_fields() -> None:
     row = frame[frame["Gene_ID"] == "2542634"].iloc[0]
 
     assert row["BRITE_ID"] == "spo00001"
-    assert row["Level_A"] == "09100 Metabolism"
-    assert row["Level_B"] == "09101 Carbohydrate metabolism"
-    assert row["Level_C"] == "00010 Glycolysis / Gluconeogenesis [PATH:spo00010]"
-    assert row["Level_D"] == "00010 Glycolysis / Gluconeogenesis [PATH:spo00010]"
+    assert row["Level_A"] == "Metabolism"
+    assert row["Level_A_ID"] == "09100"
+    assert row["Level_B"] == "Carbohydrate metabolism"
+    assert row["Level_B_ID"] == "09101"
+    assert row["Level_C"] == "Glycolysis / Gluconeogenesis"
+    assert row["Level_C_ID"] == "spo00010"
+    assert row["Level_D"] == "Glycolysis / Gluconeogenesis"
+    assert row["Level_D_ID"] == "spo00010"
     assert row["Level_E"] == "K00844 HK; hexokinase [EC:2.7.1.1]"
     assert row["Level_F"] == "2542634 hxk1; hexokinase 1"
     assert row["KO_ID"] == "K00844"
@@ -100,9 +105,12 @@ def test_flatten_brite_tree_forward_fills_shallow_branch() -> None:
     frame = flatten_brite_tree(SYNTHETIC_TREE, "spo00001")
     row = frame[frame["Gene_ID"] == "2539000"].iloc[0]
 
-    assert row["Level_B"] == "09102 Energy metabolism"
-    assert row["Level_C"] == "09102 Energy metabolism"
-    assert row["Level_D"] == "09102 Energy metabolism"
+    assert row["Level_B"] == "Energy metabolism"
+    assert row["Level_B_ID"] == "09102"
+    assert row["Level_C"] == "Energy metabolism"
+    assert row["Level_C_ID"] == "09102"
+    assert row["Level_D"] == "Energy metabolism"
+    assert row["Level_D_ID"] == "09102"
 
 
 def test_flatten_brite_tree_forward_fills_empty_nodes() -> None:
@@ -189,9 +197,12 @@ def test_flatten_brite_tree_joins_deep_levels_into_level_d() -> None:
     frame = flatten_brite_tree(tree, "spo01000")
     row = frame.iloc[0]
     assert row["Level_A"] == "1. Oxidoreductases"
+    assert row["Level_A_ID"] == ""
     assert row["Level_B"] == "1.1 Acting on the CH-OH group of donors"
     assert row["Level_C"] == "1.1.1 With NAD+ or NADP+ as acceptor"
     assert row["Level_D"] == "1.1.1.1 alcohol dehydrogenase"
+    assert row["Level_C_ID"] == ""
+    assert row["Level_D_ID"] == ""
     assert row["KO_ID"] == "K13953"
     assert row["Gene_ID"] == "2538902"
 
@@ -223,6 +234,27 @@ def test_default_brite_ids_falls_back_on_discovery_error(monkeypatch) -> None:
 
     monkeypatch.setattr(brite_module, "list_organism_brite_ids", _boom)
     assert default_brite_ids("spo") == ["spo00001"]
+
+
+def test_parse_level_label_splits_ids_and_names() -> None:
+    """Bracket ids and leading 5-digit codes become ids; biochemical brackets stay intact."""
+    assert _parse_level_label("00010 Glycolysis / Gluconeogenesis [PATH:spo00010]") == (
+        "spo00010",
+        "Glycolysis / Gluconeogenesis",
+    )
+    assert _parse_level_label("01001 Protein kinases [BR:spo01001]") == ("spo01001", "Protein kinases")
+    assert _parse_level_label("Aquaporins and small neutral solute transporters [TC:1.A.8]") == (
+        "1.A.8",
+        "Aquaporins and small neutral solute transporters",
+    )
+    assert _parse_level_label("09100 Metabolism") == ("09100", "Metabolism")
+    assert _parse_level_label("1.1.1.1 alcohol dehydrogenase") == ("", "1.1.1.1 alcohol dehydrogenase")
+    assert _parse_level_label("6.3.4.15 biotin---[biotin carboxyl-carrier protein] ligase") == (
+        "",
+        "6.3.4.15 biotin---[biotin carboxyl-carrier protein] ligase",
+    )
+    assert _parse_level_label("PKC family [OT]") == ("", "PKC family [OT]")
+    assert _parse_level_label("") == ("", "")
 
 
 def test_parse_ko_and_gene_helpers() -> None:

@@ -62,7 +62,8 @@ One row per terminal node that resolves to a gene or KO entry.
 | Column | Meaning |
 |---|---|
 | `BRITE_ID` | Source tree id (e.g. `spo00001`). |
-| `Level_A` / `Level_B` / `Level_C` / `Level_D` | Ancestor labels from the root downward. Any classification deeper than four levels is joined into `Level_D` with `" > "`; empty classification levels are forward-filled with the previous level so A–D are gap-free. |
+| `Level_A` / `Level_B` / `Level_C` / `Level_D` | Ancestor labels from the root downward, with any id bracket or leading code stripped. Any classification deeper than four levels is joined into `Level_D` with `" > "`; empty classification levels are forward-filled with the previous level so A–D are gap-free. |
+| `Level_A_ID` / `Level_B_ID` / `Level_C_ID` / `Level_D_ID` | KEGG id parsed from the matching level label: a trailing bracket id (`[PATH:spo00010]`, `[BR:spo01001]`, `[TC:1.A.8]`) or a leading 5-digit code (`09100 Metabolism`). The database prefix (e.g. `PATH:`) is stripped so pathway ids match `Pathway_ID` in the pathway tables. Empty when the label carries no id. |
 | `Level_E` | KO entry text (`K00844 HK; hexokinase [EC:2.7.1.1]`). |
 | `Level_F` | Organism gene entry text (`2542634 hxk1; hexokinase 1`). |
 | `KO_ID` / `KO_Name` | Parsed from `Level_E`. |

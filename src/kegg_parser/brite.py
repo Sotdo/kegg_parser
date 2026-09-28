@@ -12,7 +12,12 @@ Flattening rules
 - ``Level_A`` / ``Level_B`` / ``Level_C`` / ``Level_D`` hold the ancestor labels
   from the root downwards; any classification deeper than four levels is joined
   into ``Level_D`` so no information is lost. Empty classification levels are
-  forward-filled with the previous level so A-D are gap-free.
+  forward-filled with the previous level so A-D are gap-free. The matching
+  ``Level_A_ID`` / ``Level_B_ID`` / ``Level_C_ID`` / ``Level_D_ID`` columns hold
+  the KEGG id parsed from each label (bracket ids such as ``[PATH:spo00010]``
+  or ``[TC:1.A.8]``, or the leading 5-digit code as in ``09100 Metabolism``);
+  the id prefix (``PATH:``, ``BR:``...) is stripped so ids are joinable with
+  ``Pathway_ID`` values in the pathway tables.
 - ``Level_E`` holds the KO entry text and ``Level_F`` the organism gene entry.
   When KEGG merges both into a tab-separated leaf, they are split apart.
 - ``KO_ID`` / ``KO_Name`` are parsed from the KO entry; ``Gene_ID`` /
@@ -75,6 +80,8 @@ from kegg_parser.utils import (
 KO_ID_PATTERN = re.compile(r"^(K\d{5})\b")
 SPECIES_PREFIX_PATTERN = re.compile(r"^[A-Za-z]{2,5}:")
 EC_PATTERN = re.compile(r"\[EC:([0-9][0-9.\- ]*)\]")
+LEVEL_BRACKET_ID_PATTERN = re.compile(r"\[([A-Z]{2,6}):([A-Za-z0-9._\/-]+)\]")
+LEVEL_CODE_PATTERN = re.compile(r"^(\d{5})\s+(.+)$")
 
 
 # =============================================================================
@@ -204,6 +211,27 @@ def _classification_levels(path: Sequence[str]) -> list[str]:
     return filled
 
 
+def _strip_leading_code(name: str) -> str:
+    """Drop a redundant leading 5-digit KEGG code that is already captured by a bracket id."""
+    code = LEVEL_CODE_PATTERN.match(name)
+    return code.group(2) if code else name
+
+
+def _parse_level_label(text: str) -> tuple[str, str]:
+    """Split a classification label into ``(id, name)`` from a KEGG id bracket or leading code."""
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return "", ""
+    bracket = LEVEL_BRACKET_ID_PATTERN.search(cleaned)
+    if bracket:
+        name = f"{cleaned[:bracket.start()]} {cleaned[bracket.end():]}".strip()
+        return bracket.group(2), _strip_leading_code(name)
+    code = LEVEL_CODE_PATTERN.match(cleaned)
+    if code:
+        return code.group(1), code.group(2)
+    return "", cleaned
+
+
 def _build_leaf_record(name: str, path: Sequence[str], brite_id: str) -> dict[str, str] | None:
     """Build one gene-level record from a terminal node, or ``None`` when it is a label."""
     cleaned = (name or "").strip()
@@ -223,6 +251,10 @@ def _build_leaf_record(name: str, path: Sequence[str], brite_id: str) -> dict[st
         return None
 
     level_a, level_b, level_c, level_d = _classification_levels(path)
+    level_a_id, level_a = _parse_level_label(level_a)
+    level_b_id, level_b = _parse_level_label(level_b)
+    level_c_id, level_c = _parse_level_label(level_c)
+    level_d_id, level_d = _parse_level_label(level_d)
 
     ko_id, ko_name = _parse_ko(ko_text)
     gene_id, gene_symbol, gene_description = _parse_gene(gene_text)
@@ -230,9 +262,13 @@ def _build_leaf_record(name: str, path: Sequence[str], brite_id: str) -> dict[st
     return {
         "BRITE_ID": brite_id,
         "Level_A": level_a,
+        "Level_A_ID": level_a_id,
         "Level_B": level_b,
+        "Level_B_ID": level_b_id,
         "Level_C": level_c,
+        "Level_C_ID": level_c_id,
         "Level_D": level_d,
+        "Level_D_ID": level_d_id,
         "Level_E": ko_text,
         "Level_F": gene_text,
         "KO_ID": ko_id,

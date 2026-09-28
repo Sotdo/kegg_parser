@@ -86,9 +86,13 @@ class BriteColumn(StrEnum):
 
     BRITE_ID = "BRITE_ID"
     LEVEL_A = "Level_A"
+    LEVEL_A_ID = "Level_A_ID"
     LEVEL_B = "Level_B"
+    LEVEL_B_ID = "Level_B_ID"
     LEVEL_C = "Level_C"
+    LEVEL_C_ID = "Level_C_ID"
     LEVEL_D = "Level_D"
+    LEVEL_D_ID = "Level_D_ID"
     LEVEL_E = "Level_E"
     LEVEL_F = "Level_F"
     KO_ID = "KO_ID"
