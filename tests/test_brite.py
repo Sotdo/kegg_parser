@@ -83,10 +83,11 @@ def test_flatten_brite_tree_parses_levels_and_fields() -> None:
     row = frame[frame["Gene_ID"] == "2542634"].iloc[0]
 
     assert row["BRITE_ID"] == "spo00001"
+    assert row["BRITE_Name"] == ""
     assert row["Level_A"] == "Metabolism"
-    assert row["Level_A_ID"] == "09100"
+    assert row["Level_A_ID"] == "class:09100"
     assert row["Level_B"] == "Carbohydrate metabolism"
-    assert row["Level_B_ID"] == "09101"
+    assert row["Level_B_ID"] == "class:09101"
     assert row["Level_C"] == "Glycolysis / Gluconeogenesis"
     assert row["Level_C_ID"] == "spo00010"
     assert row["Level_D"] == "Glycolysis / Gluconeogenesis"
@@ -106,11 +107,11 @@ def test_flatten_brite_tree_forward_fills_shallow_branch() -> None:
     row = frame[frame["Gene_ID"] == "2539000"].iloc[0]
 
     assert row["Level_B"] == "Energy metabolism"
-    assert row["Level_B_ID"] == "09102"
+    assert row["Level_B_ID"] == "class:09102"
     assert row["Level_C"] == "Energy metabolism"
-    assert row["Level_C_ID"] == "09102"
+    assert row["Level_C_ID"] == "class:09102"
     assert row["Level_D"] == "Energy metabolism"
-    assert row["Level_D_ID"] == "09102"
+    assert row["Level_D_ID"] == "class:09102"
 
 
 def test_flatten_brite_tree_forward_fills_empty_nodes() -> None:
@@ -142,6 +143,15 @@ def test_flatten_brite_tree_forward_fills_empty_nodes() -> None:
     assert row["Level_B"] == "Top"
     assert row["Level_C"] == "Leaf"
     assert row["Level_D"] == "Leaf"
+
+
+def test_flatten_brite_tree_carries_brite_name() -> None:
+    """The listing title lands on every row; the root name is the fallback when it differs from the id."""
+    named = flatten_brite_tree(SYNTHETIC_TREE, "spo00001", "KEGG Orthology (KO)")
+    assert set(named["BRITE_Name"]) == {"KEGG Orthology (KO)"}
+
+    rooted = flatten_brite_tree({"name": "KEGG pathway maps", "children": []}, "br08901")
+    assert rooted["BRITE_Name"].tolist() == []
 
 
 def test_flatten_brite_tree_skips_pure_labels() -> None:
@@ -197,12 +207,13 @@ def test_flatten_brite_tree_joins_deep_levels_into_level_d() -> None:
     frame = flatten_brite_tree(tree, "spo01000")
     row = frame.iloc[0]
     assert row["Level_A"] == "1. Oxidoreductases"
-    assert row["Level_A_ID"] == ""
-    assert row["Level_B"] == "1.1 Acting on the CH-OH group of donors"
-    assert row["Level_C"] == "1.1.1 With NAD+ or NADP+ as acceptor"
-    assert row["Level_D"] == "1.1.1.1 alcohol dehydrogenase"
-    assert row["Level_C_ID"] == ""
-    assert row["Level_D_ID"] == ""
+    assert row["Level_A_ID"] == "1. Oxidoreductases"
+    assert row["Level_B"] == "Acting on the CH-OH group of donors"
+    assert row["Level_C"] == "With NAD+ or NADP+ as acceptor"
+    assert row["Level_D"] == "alcohol dehydrogenase"
+    assert row["Level_B_ID"] == "EC:1.1"
+    assert row["Level_C_ID"] == "EC:1.1.1"
+    assert row["Level_D_ID"] == "EC:1.1.1.1"
     assert row["KO_ID"] == "K13953"
     assert row["Gene_ID"] == "2538902"
 
@@ -247,13 +258,24 @@ def test_parse_level_label_splits_ids_and_names() -> None:
         "1.A.8",
         "Aquaporins and small neutral solute transporters",
     )
-    assert _parse_level_label("09100 Metabolism") == ("09100", "Metabolism")
-    assert _parse_level_label("1.1.1.1 alcohol dehydrogenase") == ("", "1.1.1.1 alcohol dehydrogenase")
-    assert _parse_level_label("6.3.4.15 biotin---[biotin carboxyl-carrier protein] ligase") == (
-        "",
-        "6.3.4.15 biotin---[biotin carboxyl-carrier protein] ligase",
+    assert _parse_level_label("Pores ion channels [TC:1]") == ("TC:1", "Pores ion channels")
+    assert _parse_level_label("09100 Metabolism") == ("class:09100", "Metabolism")
+    assert _parse_level_label("09190 Not Included in Maps or Brite") == (
+        "class:09190",
+        "Not Included in Maps or Brite",
     )
-    assert _parse_level_label("PKC family [OT]") == ("", "PKC family [OT]")
+    assert _parse_level_label("00566 Sulfoquinovose metabolism") == ("map:00566", "Sulfoquinovose metabolism")
+    assert _parse_level_label("1.1.1.1 alcohol dehydrogenase") == ("EC:1.1.1.1", "alcohol dehydrogenase")
+    assert _parse_level_label("1.1 Acting on the CH-OH group of donors") == (
+        "EC:1.1",
+        "Acting on the CH-OH group of donors",
+    )
+    assert _parse_level_label("CXXC CpG-binding proteins") == ("CXXC CpG-binding proteins", "CXXC CpG-binding proteins")
+    assert _parse_level_label("6.3.4.15 biotin---[biotin carboxyl-carrier protein] ligase") == (
+        "EC:6.3.4.15",
+        "biotin---[biotin carboxyl-carrier protein] ligase",
+    )
+    assert _parse_level_label("PKC family [OT]") == ("PKC family [OT]", "PKC family [OT]")
     assert _parse_level_label("") == ("", "")
 
 

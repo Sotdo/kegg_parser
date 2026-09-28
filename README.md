@@ -62,8 +62,9 @@ One row per terminal node that resolves to a gene or KO entry.
 | Column | Meaning |
 |---|---|
 | `BRITE_ID` | Source tree id (e.g. `spo00001`). |
+| `BRITE_Name` | Tree title from the `list/brite/<org>` listing (e.g. `KEGG Orthology (KO) - Schizosaccharomyces pombe (fission yeast)`) — the name shown above `Level_A`. Empty when the listing is unavailable. |
 | `Level_A` / `Level_B` / `Level_C` / `Level_D` | Ancestor labels from the root downward, with any id bracket or leading code stripped. Any classification deeper than four levels is joined into `Level_D` with `" > "`; empty classification levels are forward-filled with the previous level so A–D are gap-free. |
-| `Level_A_ID` / `Level_B_ID` / `Level_C_ID` / `Level_D_ID` | KEGG id parsed from the matching level label: a trailing bracket id (`[PATH:spo00010]`, `[BR:spo01001]`, `[TC:1.A.8]`) or a leading 5-digit code (`09100 Metabolism`). The database prefix (e.g. `PATH:`) is stripped so pathway ids match `Pathway_ID` in the pathway tables. Empty when the label carries no id. |
+| `Level_A_ID` / `Level_B_ID` / `Level_C_ID` / `Level_D_ID` | KEGG id parsed from the matching level label. Bracket ids are kept bare (`[PATH:spo00010]` -> `spo00010`, joinable with `Pathway_ID`); leading 5-digit codes become `map:00566` or `class:09100` (`09xxxx` codes are BRITE classes, not pathway maps); leading EC numbers become `EC:1.1.1.1`; labels with no id fall back to the label text itself, so ids are never empty and never purely numeric (safe against Excel/pandas numeric coercion). |
 | `Level_E` | KO entry text (`K00844 HK; hexokinase [EC:2.7.1.1]`). |
 | `Level_F` | Organism gene entry text (`2542634 hxk1; hexokinase 1`). |
 | `KO_ID` / `KO_Name` | Parsed from `Level_E`. |

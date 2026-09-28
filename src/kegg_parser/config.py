@@ -85,6 +85,7 @@ class BriteColumn(StrEnum):
     """Column names of the flattened BRITE gene table."""
 
     BRITE_ID = "BRITE_ID"
+    BRITE_NAME = "BRITE_Name"
     LEVEL_A = "Level_A"
     LEVEL_A_ID = "Level_A_ID"
     LEVEL_B = "Level_B"
